@@ -11,6 +11,7 @@ const base = {
   regularPrice: money.nullable().optional(),
   costPrice: money.nullable().optional(),
   image: z.string().trim().max(500).refine((v) => !v || v.startsWith("/") || /^https:\/\//.test(v), "Image must be a /path or an https:// URL").nullable().optional(),
+  gallery: z.array(z.string().trim().max(500).refine((v) => v.startsWith("/") || /^https:\/\//.test(v), "Gallery images must be /paths or https:// URLs")).max(12),
   categorySlugs: z.array(z.string().trim().regex(/^[a-z0-9-]+$/)).max(10),
   brandSlug: z.string().trim().max(60).nullable().optional(),
   shortDescription: z.string().trim().max(400),
@@ -26,6 +27,8 @@ export const productCreateSchema = z
     sku: z.string().trim().max(40).regex(/^[A-Za-z0-9-]*$/, "SKU: letters, digits and dashes only").optional(),
     slug: z.string().trim().max(80).regex(/^([a-z0-9]+(?:-[a-z0-9]+)*)?$/, "Slug: lowercase words separated by dashes").optional(),
     stock: z.number().int().min(0).max(100000),
+    locationId: z.number().int().positive().optional(), // where the opening stock is (default: main shop)
+    gallery: base.gallery.default([]),
     categorySlugs: base.categorySlugs.default([]),
     shortDescription: base.shortDescription.default(""),
     description: base.description.default(""),
@@ -66,6 +69,7 @@ export function publicProductRow(p: Product, finance: boolean) {
   return {
     ...rest,
     categorySlugs: p.categorySlugs.split(",").filter(Boolean),
+    gallery: p.gallery.split("\n").filter(Boolean),
     costPrice: finance ? costPrice : undefined,
     stockState: p.stock <= 0 ? "out" : p.stock <= p.lowStockThreshold ? "low" : "in",
   };

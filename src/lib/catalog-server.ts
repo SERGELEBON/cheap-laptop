@@ -2,6 +2,7 @@
    run, then serves products from the DB (admin-editable) merged with the static
    category/brand/page data. Server-side only. */
 import { db } from "@/lib/db";
+import { backfillProductStock } from "@/lib/locations";
 import type { Cat, Brand, Page, Product, Catalog } from "@/lib/types";
 /* Imported (not read with fs) so the data is bundled into the serverless
    function on Vercel, where public/ is not available on disk at runtime. */
@@ -58,6 +59,7 @@ export async function ensureSeeded(): Promise<void> {
         })),
       });
     }
+    await backfillProductStock();
   }
   seeded = true;
 }
@@ -66,7 +68,7 @@ function ghs(pesewas: number): string {
   return "GH\u20B5 " + (pesewas / 100).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-type Row = Omit<SeedProduct, "categorySlugs" | "image"> & { id: number; categorySlugs: string; image: string | null };
+type Row = Omit<SeedProduct, "categorySlugs" | "image"> & { id: number; categorySlugs: string; image: string | null; gallery?: string };
 
 /* Products from the DB; if the DB is unreachable (e.g. no DATABASE_URL, or the
    read-only filesystem on Vercel with SQLite) fall back to the static seed so
@@ -121,7 +123,7 @@ export async function buildCatalog(): Promise<Catalog> {
       onSale: r.onSale,
       discount: r.discount,
       image: r.image,
-      gallery: r.image ? [r.image] : [],
+      gallery: [r.image, ...("gallery" in r && typeof r.gallery === "string" ? r.gallery.split("\n") : [])].filter((x): x is string => !!x),
       categories: cats,
       brand,
       shortDescription: r.shortDescription,

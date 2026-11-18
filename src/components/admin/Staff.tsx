@@ -12,6 +12,7 @@ interface StaffRow {
   id: number; email: string; name: string | null; image: string | null; role: Role; active: boolean;
   lastLoginAt: string | null; createdAt: string; hasSignedIn: boolean; invitedBy: { email: string } | null;
   hasGoogle: boolean; hasPassword: boolean; linkPending: boolean;
+  allLocations: boolean; locations: { id: number; name: string; code: string }[];
 }
 
 const PERM_LABELS: Record<Permission, string> = {
@@ -27,6 +28,7 @@ const PERM_LABELS: Record<Permission, string> = {
   "orders:update": "Process & cancel orders",
   "staff:read": "View staff list",
   "staff:manage": "Invite & manage staff",
+  "locations:manage": "Create & edit locations (shops)",
   "audit:read": "View activity log",
 };
 
@@ -37,6 +39,7 @@ export function StaffPage() {
   const [removing, setRemoving] = useState<StaffRow | null>(null);
   const [showMatrix, setShowMatrix] = useState(false);
   const [link, setLink] = useState<{ url: string; email: string; reset: boolean } | null>(null);
+  const [scoping, setScoping] = useState<StaffRow | null>(null);
 
   const newLink = async (s: StaffRow) => {
     try {
@@ -72,7 +75,7 @@ export function StaffPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-[13px] min-w-[780px]">
               <thead><tr>
-                <th className={th}>Member</th><th className={th}>Role</th><th className={th}>Status</th><th className={th}>Last sign-in</th>
+                <th className={th}>Member</th><th className={th}>Role</th><th className={th}>Locations</th><th className={th}>Status</th><th className={th}>Last sign-in</th>
                 {manage && <th className={cx(th, "text-right")}>Actions</th>}
               </tr></thead>
               <tbody>
@@ -96,6 +99,19 @@ export function StaffPage() {
                             {[...new Set([s.role, ...data.assignableRoles])].map((r) => <option key={r} value={r} disabled={!data.assignableRoles.includes(r)}>{ROLE_INFO[r].label}</option>)}
                           </Select>
                         ) : <RoleBadge role={s.role} />}
+                      </td>
+                      <td className={td}>
+                        {s.allLocations ? (
+                          <span className="text-[12px] text-slate-500">All locations</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {s.locations.length ? s.locations.map((l) => <span key={l.id} title={l.name} className="font-mono text-[11px] font-bold bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">{l.code}</span>)
+                              : <span className="text-[12px] text-amber-600">None assigned</span>}
+                          </div>
+                        )}
+                        {editable && !["OWNER", "ADMIN"].includes(s.role) && (
+                          <button onClick={() => setScoping(s)} className="block text-[11.5px] font-semibold text-[var(--em-red)] hover:underline mt-1">Change</button>
+                        )}
                       </td>
                       <td className={td}>
                         {!s.active ? <Badge color="#64748b" dot>Disabled</Badge> : s.hasSignedIn ? <Badge color="#16a34a" dot>Active</Badge> : <Badge color="#d97706" dot>Invited</Badge>}
@@ -138,6 +154,17 @@ export function StaffPage() {
 
       {inviting && data && <InviteModal roles={data.assignableRoles} onClose={() => setInviting(false)} onDone={(l) => { setInviting(false); setLink(l); reload(); }} />}
       {link && <AccessLinkModal {...link} onClose={() => setLink(null)} />}
+      {scoping && (
+        <LocationScopeModal
+          title={`Locations for ${scoping.name || scoping.email}`}
+          initial={scoping.allLocations ? [] : scoping.locations.map((l) => l.id)}
+          onClose={() => setScoping(null)}
+          onSave={async (ids) => {
+            await patch(scoping, { locationIds: ids }, ids.length ? `${scoping.email} now works at ${ids.length} location(s)` : `${scoping.email} now has access to all locations`);
+            setScoping(null);
+          }}
+        />
+      )}
       {removing && (
         <ConfirmDialog title="Remove staff member?" danger confirmLabel="Remove" onClose={() => setRemoving(null)}
           message={<><b>{removing.email}</b> will lose access immediately. Their past actions stay in the activity log. Prefer “Disable” if they may come back.</>}
@@ -178,6 +205,8 @@ function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () =>
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<Role>(roles.includes("SALES") ? "SALES" : roles[roles.length - 1]);
+  const [locationIds, setLocationIds] = useState<number[]>([]);
+  const allRole = role === "OWNER" || role === "ADMIN";
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -185,7 +214,7 @@ function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () =>
     setErr(null);
     setBusy(true);
     try {
-      const d = await api<{ url: string }>("/api/admin/staff", { method: "POST", json: { email, role, name: name || undefined } });
+      const d = await api<{ url: string }>("/api/admin/staff", { method: "POST", json: { email, role, name: name || undefined, locationIds: allRole ? [] : locationIds } });
       toast(`${email} invited`);
       onDone({ url: d.url, email, reset: false });
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
@@ -207,7 +236,50 @@ function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () =>
             ))}
           </div>
         </Field>
+        {allRole ? (
+          <p className="text-[12px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2">{ROLE_INFO[role].label}s always have access to every location.</p>
+        ) : (
+          <LocationPicker value={locationIds} onChange={setLocationIds} />
+        )}
       </div>
+    </Modal>
+  );
+}
+
+/** Empty selection = all locations. */
+function LocationPicker({ value, onChange }: { value: number[]; onChange: (ids: number[]) => void }) {
+  const { me } = useAdmin();
+  const all = value.length === 0;
+  return (
+    <Field label="Works at" hint={all ? "Can see and manage every shop." : "Only sees stock, orders and figures for these shops."}>
+      <div className="space-y-1.5">
+        <label className={cx("flex items-center gap-2.5 border rounded-lg px-3 py-2 cursor-pointer text-[13px]", all ? "border-[var(--em-red)] bg-[var(--em-red)]/5" : "border-slate-200")}>
+          <input type="checkbox" checked={all} onChange={() => onChange(all ? (me.allLocations[0] ? [me.allLocations[0].id] : []) : [])} className="accent-[var(--em-red)]" />
+          <b>All locations</b>
+        </label>
+        <div className="grid sm:grid-cols-2 gap-1.5">
+          {me.allLocations.map((l) => {
+            const on = value.includes(l.id);
+            return (
+              <label key={l.id} className={cx("flex items-center gap-2.5 border rounded-lg px-3 py-2 cursor-pointer text-[13px]", on ? "border-[var(--em-red)] bg-[var(--em-red)]/5" : "border-slate-200", all && "opacity-50")}>
+                <input type="checkbox" checked={on} onChange={() => onChange(on ? value.filter((x) => x !== l.id) : [...value, l.id])} className="accent-[var(--em-red)]" />
+                <span className="font-mono text-[11px] font-bold text-slate-500">{l.code}</span> {l.name}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    </Field>
+  );
+}
+
+function LocationScopeModal({ title, initial, onSave, onClose }: { title: string; initial: number[]; onSave: (ids: number[]) => Promise<void>; onClose: () => void }) {
+  const [ids, setIds] = useState<number[]>(initial);
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal title={title} onClose={onClose} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={busy} onClick={async () => { setBusy(true); try { await onSave(ids); } finally { setBusy(false); } }}>Save</Button></>}>
+      <LocationPicker value={ids} onChange={setIds} />
+      <p className="text-[11.5px] text-slate-400 mt-3">Saving signs this person out so the new access applies immediately.</p>
     </Modal>
   );
 }

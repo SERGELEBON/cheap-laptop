@@ -4,13 +4,14 @@ import { MapPin, Phone, Mail, ShoppingCart, StickyNote } from "lucide-react";
 import { useAdmin } from "./AdminApp";
 import {
   Button, Card, ConfirmDialog, EmptyState, ErrorState, Modal, OrderStatusBadge, PageHeader, Pagination, SearchInput, Spinner,
-  Tabs, api, cx, fmtDate, ghs, td, th, useApi, useDebounced, usePage, ORDER_STATUS_COLORS,
+  Select, Tabs, api, cx, fmtDate, ghs, td, th, useApi, useDebounced, usePage, ORDER_STATUS_COLORS,
 } from "./ui";
 import { ORDER_STATUSES, ORDER_TRANSITIONS, type OrderStatus } from "@/lib/rbac";
 
 interface ORow {
   id: number; ref: string; customerName: string; phone: string; email: string | null; address: string; city: string; region: string;
   notes: string | null; payment: string; subtotal: number; shipping: number; total: number; status: OrderStatus; createdAt: string;
+  locationId: number | null; location: { id: number; name: string; code: string } | null;
   items: { id: number; name: string; qty: number; price: number; productId: number | null }[];
 }
 
@@ -19,13 +20,14 @@ const ACTION_LABEL: Record<OrderStatus, string> = {
 };
 
 export function OrdersPage() {
+  const { activeLocation } = useAdmin();
   const [status, setStatus] = useState<"" | OrderStatus>("");
   const [q, setQ] = useState("");
   const dq = useDebounced(q);
-  const [page, setPage] = usePage([dq, status].join("|"));
+  const [page, setPage] = usePage([dq, status, activeLocation].join("|"));
   const per = 15;
   const { data, error, loading, reload } = useApi<{ total: number; rows: ORow[]; byStatus: Record<string, number> }>(
-    `/api/admin/orders?${new URLSearchParams({ q: dq, status, page: String(page), per: String(per) })}`
+    `/api/admin/orders?${new URLSearchParams({ q: dq, status, page: String(page), per: String(per), ...(activeLocation ? { locationId: String(activeLocation) } : {}) })}`
   );
   const [open, setOpen] = useState<ORow | null>(null);
   const all = data ? Object.values(data.byStatus).reduce((a, b) => a + b, 0) : undefined;
@@ -44,7 +46,7 @@ export function OrdersPage() {
           <div className={cx("overflow-x-auto", loading && "opacity-60")}>
             <table className="w-full text-[13px] min-w-[760px]">
               <thead><tr>
-                <th className={th}>Order</th><th className={th}>Customer</th><th className={th}>Items</th><th className={th}>Payment</th>
+                <th className={th}>Order</th><th className={th}>Customer</th><th className={th}>Shop</th><th className={th}>Items</th><th className={th}>Payment</th>
                 <th className={cx(th, "text-right")}>Total</th><th className={th}>Status</th>
               </tr></thead>
               <tbody>
@@ -52,6 +54,7 @@ export function OrdersPage() {
                   <tr key={o.id} onClick={() => setOpen(o)} className="hover:bg-slate-50/70 cursor-pointer">
                     <td className={td}><div className="font-bold text-[var(--em-red)]">{o.ref}</div><div className="text-[11.5px] text-slate-400">{fmtDate(o.createdAt)}</div></td>
                     <td className={td}><div className="font-medium text-slate-800">{o.customerName}</div><div className="text-[11.5px] text-slate-400">{o.phone} · {o.city}</div></td>
+                    <td className={td} title={o.location?.name}><span className="font-mono text-[12px] font-bold text-slate-600">{o.location?.code ?? "—"}</span></td>
                     <td className={cx(td, "text-slate-500")}>{o.items.reduce((a, i) => a + i.qty, 0)} item(s)</td>
                     <td className={cx(td, "text-slate-500 text-[12px]")}>{o.payment}</td>
                     <td className={cx(td, "text-right font-bold whitespace-nowrap")}>{ghs(o.total)}</td>
@@ -70,7 +73,18 @@ export function OrdersPage() {
 }
 
 function OrderDrawer({ order, onClose, onChanged }: { order: ORow; onClose: () => void; onChanged: (o: ORow) => void }) {
-  const { can, toast } = useAdmin();
+  const { can, toast, me } = useAdmin();
+  const [moving, setMoving] = useState(false);
+  const reassign = async (locationId: number) => {
+    if (!locationId || locationId === order.locationId) return;
+    setMoving(true);
+    try {
+      await api(`/api/admin/orders/${order.id}`, { method: "PATCH", json: { locationId } });
+      const loc = me.allLocations.find((l) => l.id === locationId) ?? null;
+      toast(`${order.ref} moved to ${loc?.name ?? "another shop"} (stock moved too)`);
+      onChanged({ ...order, locationId, location: loc ? { id: loc.id, name: loc.name, code: loc.code } : null });
+    } catch (e) { toast((e as Error).message, "err"); } finally { setMoving(false); }
+  };
   const [busy, setBusy] = useState<OrderStatus | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const next = ORDER_TRANSITIONS[order.status];
@@ -142,6 +156,17 @@ function OrderDrawer({ order, onClose, onChanged }: { order: ORow; onClose: () =
           <div className="flex items-start gap-2 text-slate-600"><MapPin size={14} className="mt-0.5 shrink-0" /> {order.address}, {order.city}, {order.region}</div>
           {order.notes && <div className="flex items-start gap-2 text-slate-600 bg-amber-50 rounded-lg p-2.5"><StickyNote size={14} className="mt-0.5 shrink-0" /> {order.notes}</div>}
           <div className="text-slate-500 pt-2 border-t border-slate-100">Payment: <b className="text-slate-700">{order.payment}</b><br />Placed {fmtDate(order.createdAt)}</div>
+          <div className="pt-2 border-t border-slate-100">
+            <div className="text-[12px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Fulfilled by</div>
+            {can("orders:update") && ["pending", "processing"].includes(order.status) && me.allLocations.length > 1 ? (
+              <Select value={order.locationId ?? ""} disabled={moving} onChange={(e) => reassign(Number(e.target.value))} aria-label="Fulfilling shop">
+                {order.locationId == null && <option value="">— not assigned —</option>}
+                {me.allLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </Select>
+            ) : (
+              <b className="text-slate-700">{order.location?.name ?? "—"}</b>
+            )}
+          </div>
         </div>
       </div>
       {confirmCancel && (

@@ -17,6 +17,8 @@ export interface StaffSession {
   name: string | null;
   image: string | null;
   role: Role;
+  /** null = all locations; otherwise the shops this person works at */
+  locationIds: number[] | null;
 }
 
 function secret(): string {
@@ -76,9 +78,14 @@ export async function getStaff(): Promise<StaffSession | null> {
   const jar = await cookies();
   const data = decode<{ uid: number; v: number; e: number }>(jar.get(SESSION_COOKIE)?.value);
   if (!data || typeof data.uid !== "number" || data.e < Date.now()) return null;
-  const user = await db.staffUser.findUnique({ where: { id: data.uid } });
+  const user = await db.staffUser.findUnique({ where: { id: data.uid }, include: { locations: { select: { locationId: true } } } });
   if (!user || !user.active || user.sessionVersion !== data.v) return null;
-  return { id: user.id, email: user.email, name: user.name, image: user.image, role: user.role as Role };
+  const role = user.role as Role;
+  const all = role === "OWNER" || role === "ADMIN" || user.allLocations;
+  return {
+    id: user.id, email: user.email, name: user.name, image: user.image, role,
+    locationIds: all ? null : user.locations.map((l) => l.locationId),
+  };
 }
 
 type Guard = { ok: true; staff: StaffSession } | { ok: false; res: NextResponse };

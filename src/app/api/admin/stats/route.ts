@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireStaff } from "@/lib/admin-auth";
 import { can } from "@/lib/rbac";
+import { ensureLocations, locationWhere, scopeOf } from "@/lib/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -15,20 +16,30 @@ export async function GET(req: NextRequest) {
   const showOrders = can(g.staff.role, "orders:read");
 
   try {
+    await ensureLocations();
+    const reqLoc = Number(new URL(req.url).searchParams.get("locationId")) || undefined;
+    const scoped = locationWhere(g.staff, reqLoc); // { locationId?: … } for orders & stock
+    const filtered = reqLoc !== undefined || scopeOf(g.staff) !== null;
     const since30 = new Date(Date.now() - 29 * DAY);
     since30.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const [products, orders30, byStatusRaw, recent, topItems, revenueAll] = await Promise.all([
-      db.product.findMany({ where: { status: { not: "ARCHIVED" } }, select: { id: true, name: true, sku: true, image: true, stock: true, lowStockThreshold: true, price: true, costPrice: true, status: true } }),
-      db.order.findMany({ where: { createdAt: { gte: since30 } }, select: { total: true, status: true, createdAt: true } }),
-      db.order.groupBy({ by: ["status"], _count: { _all: true } }),
+      db.product.findMany({
+        where: { status: { not: "ARCHIVED" } },
+        select: {
+          id: true, name: true, sku: true, image: true, stock: true, lowStockThreshold: true, price: true, costPrice: true, status: true,
+          stocks: filtered ? { where: scoped, select: { quantity: true } } : false,
+        },
+      }),
+      db.order.findMany({ where: { createdAt: { gte: since30 }, ...scoped }, select: { total: true, status: true, createdAt: true } }),
+      db.order.groupBy({ by: ["status"], where: scoped, _count: { _all: true } }),
       showOrders
-        ? db.order.findMany({ orderBy: { createdAt: "desc" }, take: 6, select: { id: true, ref: true, customerName: true, total: true, status: true, createdAt: true } })
+        ? db.order.findMany({ where: scoped, orderBy: { createdAt: "desc" }, take: 6, select: { id: true, ref: true, customerName: true, total: true, status: true, createdAt: true, location: { select: { code: true } } } })
         : [],
-      db.orderItem.groupBy({ by: ["name"], where: { order: { status: { not: "cancelled" } } }, _sum: { qty: true }, orderBy: { _sum: { qty: "desc" } }, take: 6 }),
-      finance ? db.order.aggregate({ _sum: { total: true }, where: { status: { not: "cancelled" } } }) : null,
+      db.orderItem.groupBy({ by: ["name"], where: { order: { status: { not: "cancelled" }, ...scoped } }, _sum: { qty: true }, orderBy: { _sum: { qty: "desc" } }, take: 6 }),
+      finance ? db.order.aggregate({ _sum: { total: true }, where: { status: { not: "cancelled" }, ...scoped } }) : null,
     ]);
 
     /* revenue & orders per day, last 30 days */
@@ -48,6 +59,10 @@ export async function GET(req: NextRequest) {
     }
     const validOrders30 = orders30.filter((o) => o.status !== "cancelled").length;
 
+    /* when looking at one shop (or a branch-limited person), stock = that shop's quantity */
+    for (const p of products as (typeof products[number] & { stocks?: { quantity: number }[] })[]) {
+      if (filtered) p.stock = (p.stocks ?? []).reduce((a, x) => a + x.quantity, 0);
+    }
     const active = products.filter((p) => p.status === "ACTIVE");
     const out = products.filter((p) => p.stock <= 0);
     const low = products.filter((p) => p.stock > 0 && p.stock <= p.lowStockThreshold);

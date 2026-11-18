@@ -14,7 +14,7 @@ interface Stats {
   };
   byStatus: Record<string, number>;
   daily: { date: string; revenue: number; orders: number }[];
-  recentOrders: { id: number; ref: string; customerName: string; total: number; status: string; createdAt: string }[];
+  recentOrders: { id: number; ref: string; customerName: string; total: number; status: string; createdAt: string; location?: { code: string } | null }[];
   topProducts: { name: string; qty: number }[];
   stockAlerts: { id: number; name: string; sku: string; image: string | null; stock: number; threshold: number }[];
 }
@@ -22,8 +22,9 @@ interface Stats {
 const tooltipStyle = { borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 12, boxShadow: "0 4px 12px rgba(15,23,42,.08)" };
 
 export function Overview() {
-  const { me, go, can } = useAdmin();
-  const { data, error, loading, reload } = useApi<Stats>("/api/admin/stats");
+  const { me, go, can, activeLocation } = useAdmin();
+  const { data, error, loading, reload } = useApi<Stats>(`/api/admin/stats${activeLocation ? `?locationId=${activeLocation}` : ""}`);
+  const here = me.locations.find((l) => l.id === activeLocation);
   const hello = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening";
 
   if (error) return <ErrorState message={error} onRetry={reload} />;
@@ -43,7 +44,7 @@ export function Overview() {
 
   return (
     <div>
-      <PageHeader title={`${hello}, ${me.user.name?.split(" ")[0] || "there"}`} subtitle="Here's what's happening in your store." />
+      <PageHeader title={`${hello}, ${me.user.name?.split(" ")[0] || "there"}`} subtitle={here ? `Here's what's happening at ${here.name}.` : me.locations.length > 1 ? `All ${me.locations.length} locations combined — pick a shop at the top to focus on it.` : "Here's what's happening in your store."} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3 mb-5">
         {kpis.map((c) => (
@@ -117,7 +118,7 @@ export function Overview() {
                   <li key={o.id} className="flex items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-semibold text-slate-800">{o.ref} <span className="font-normal text-slate-500">· {o.customerName}</span></div>
-                      <div className="text-[11.5px] text-slate-400">{timeAgo(o.createdAt)}</div>
+                      <div className="text-[11.5px] text-slate-400">{timeAgo(o.createdAt)}{o.location ? ` · ${o.location.code}` : ""}</div>
                     </div>
                     <OrderStatusBadge status={o.status} />
                     <div className="text-[13px] font-bold w-[110px] text-right">{ghs(o.total)}</div>

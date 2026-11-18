@@ -7,6 +7,8 @@ import { audit } from "@/lib/audit";
 import { clientIp, requireStaff } from "@/lib/admin-auth";
 import { can } from "@/lib/rbac";
 import { productCreateSchema, discountOf, slugify, publicProductRow } from "@/lib/admin-products";
+import { canAccessLocation, ensureLocations, mainLocationId } from "@/lib/locations";
+import { applyStockChange } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -89,8 +91,14 @@ export async function POST(req: NextRequest) {
   const regularPrice = d.regularPrice ?? null;
   const discount = discountOf(d.price, regularPrice);
 
+  if (d.locationId && !canAccessLocation(g.staff, d.locationId)) {
+    return NextResponse.json({ error: "You can only add stock at your own location" }, { status: 403 });
+  }
+
   try {
+    await ensureLocations();
     const product = await db.$transaction(async (tx) => {
+      const locationId = d.locationId ?? (await mainLocationId(tx));
       const p = await tx.product.create({
         data: {
           name: d.name,
@@ -103,18 +111,17 @@ export async function POST(req: NextRequest) {
           onSale: discount > 0,
           discount,
           image: d.image || null,
+          gallery: d.gallery.join("\n"),
           categorySlugs: d.categorySlugs.join(","),
           brandSlug: d.brandSlug || null,
           shortDescription: d.shortDescription,
           description: d.description,
-          stock: d.stock,
+          stock: 0, // set below through the stock ledger
           lowStockThreshold: d.lowStockThreshold,
           featured: d.featured,
         },
       });
-      await tx.stockMovement.create({
-        data: { productId: p.id, type: "INITIAL", quantity: d.stock, stockBefore: 0, stockAfter: d.stock, actorId: g.staff.id, note: "Product created" },
-      });
+      await applyStockChange(tx, { productId: p.id, locationId, type: "INITIAL", amount: d.stock, actorId: g.staff.id, note: "Product created" });
       return p;
     });
     await audit(g.staff, "product.create", { entity: "Product", entityId: product.id, summary: `Created "${product.name}" (${product.sku})`, ip: clientIp(req) });

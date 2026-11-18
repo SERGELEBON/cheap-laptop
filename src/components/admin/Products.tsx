@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Boxes, Copy, ImageOff, Package, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { Archive, Boxes, Copy, ImageOff, ImagePlus, Loader2, Package, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { useAdmin } from "./AdminApp";
 import {
   Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input, Modal, PageHeader, Pagination, ProductStatusBadge,
@@ -11,7 +11,7 @@ import { StockAdjustModal } from "./Inventory";
 export interface PRow {
   id: number; slug: string; name: string; sku: string; status: "ACTIVE" | "DRAFT" | "ARCHIVED";
   price: number; regularPrice: number | null; costPrice?: number | null; discount: number; onSale: boolean;
-  image: string | null; categorySlugs: string[]; brandSlug: string | null; shortDescription: string; description: string;
+  image: string | null; gallery: string[]; categorySlugs: string[]; brandSlug: string | null; shortDescription: string; description: string;
   stock: number; lowStockThreshold: number; featured: boolean; updatedAt: string; stockState: "in" | "low" | "out";
 }
 
@@ -183,9 +183,10 @@ function IconBtn({ label, onClick, children, danger }: { label: string; onClick:
 
 /* ================= create / edit form ================= */
 function ProductForm({ product, template, onClose, onSaved }: { product: PRow | null; template: PRow | null; onClose: () => void; onSaved: () => void }) {
-  const { can, toast } = useAdmin();
+  const { can, toast, me, activeLocation } = useAdmin();
   const tax = useTaxonomy();
   const isNew = !product;
+  const [stockLocation, setStockLocation] = useState<number>(activeLocation ?? me.locations.find((l) => l.isMain)?.id ?? me.locations[0]?.id ?? 0);
   const src = product || template;
   const [f, setF] = useState({
     name: template ? `${template.name} (copy)` : src?.name || "",
@@ -198,6 +199,7 @@ function ProductForm({ product, template, onClose, onSaved }: { product: PRow | 
     stock: "0",
     lowStockThreshold: String(src?.lowStockThreshold ?? 3),
     image: src?.image || "",
+    gallery: src?.gallery || [],
     categorySlugs: src?.categorySlugs || [],
     brandSlug: src?.brandSlug || "",
     shortDescription: src?.shortDescription || "",
@@ -224,13 +226,14 @@ function ProductForm({ product, template, onClose, onSaved }: { product: PRow | 
     if (regular != null && regular < price) return setErr("Regular price must be higher than or equal to the selling price.");
     const body: Record<string, unknown> = {
       name: f.name.trim(), status: f.status, price, regularPrice: regular,
-      image: f.image.trim() || null, categorySlugs: f.categorySlugs, brandSlug: f.brandSlug || null,
+      image: f.image.trim() || null, gallery: f.gallery, categorySlugs: f.categorySlugs, brandSlug: f.brandSlug || null,
       shortDescription: f.shortDescription.trim(), description: f.description.trim(),
       lowStockThreshold: parseInt(f.lowStockThreshold, 10) || 0, featured: f.featured,
     };
     if (can("finance:view")) body.costPrice = cost;
     if (isNew) {
       body.stock = Math.max(0, parseInt(f.stock, 10) || 0);
+      if (stockLocation) body.locationId = stockLocation;
       if (f.sku.trim()) body.sku = f.sku.trim();
       if (f.slug.trim()) body.slug = f.slug.trim();
     } else {
@@ -285,7 +288,16 @@ function ProductForm({ product, template, onClose, onSaved }: { product: PRow | 
             <div className="grid sm:grid-cols-3 gap-3.5">
               <Field label="SKU" hint={isNew ? "Leave empty to generate" : undefined}><Input value={f.sku} onChange={(e) => set("sku", e.target.value.toUpperCase())} placeholder="HP-840-G8" /></Field>
               {isNew ? (
-                <Field label="Opening stock"><Input type="number" min={0} value={f.stock} onChange={(e) => set("stock", e.target.value)} /></Field>
+                <Field label="Opening stock" hint={me.locations.length > 1 ? undefined : me.locations[0] ? `At ${me.locations[0].name}` : undefined}>
+                  <div className="flex gap-2">
+                    <Input type="number" min={0} value={f.stock} onChange={(e) => set("stock", e.target.value)} className="!w-24" />
+                    {me.locations.length > 1 && (
+                      <Select value={stockLocation} onChange={(e) => setStockLocation(Number(e.target.value))} aria-label="Location of the opening stock">
+                        {me.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                      </Select>
+                    )}
+                  </div>
+                </Field>
               ) : (
                 <Field label="Current stock" hint="Change it with “Adjust stock”"><Input value={String(product!.stock)} disabled /></Field>
               )}
@@ -325,18 +337,88 @@ function ProductForm({ product, template, onClose, onSaved }: { product: PRow | 
               {tax.brands.map((b) => <option key={b.slug} value={b.slug}>{b.name}</option>)}
             </Select>
           </Field>
-          <Field label="Image" hint="/images/… path or https:// URL">
-            <Input value={f.image} onChange={(e) => set("image", e.target.value)} placeholder="/images/cl/p-lenovo.png" />
-          </Field>
-          <div className="aspect-square rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {f.image ? <img src={f.image} alt="Preview" className="max-w-full max-h-full object-contain" /> : <ImageOff className="text-slate-300" />}
-          </div>
+          <ImagesField
+            main={f.image}
+            gallery={f.gallery}
+            onChange={(main, gallery) => setF((s) => ({ ...s, image: main, gallery }))}
+          />
           {!isNew && (
             <Field label="URL slug"><Input value={f.slug} onChange={(e) => set("slug", e.target.value.toLowerCase())} /></Field>
           )}
         </aside>
       </div>
     </Modal>
+  );
+}
+
+/* ================= images: upload (Vercel Blob) or URL, main + gallery ================= */
+function ImagesField({ main, gallery, onChange }: { main: string; gallery: string[]; onChange: (main: string, gallery: string[]) => void }) {
+  const { toast } = useAdmin();
+  const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState("");
+  const all = [main, ...gallery].filter(Boolean);
+  const setAll = (list: string[]) => onChange(list[0] ?? "", list.slice(1));
+
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true);
+    const added: string[] = [];
+    try {
+      for (const file of Array.from(files).slice(0, 12 - all.length)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || "Upload failed");
+        added.push(d.url);
+      }
+    } catch (e) {
+      toast((e as Error).message, "err");
+    } finally {
+      if (added.length) setAll([...all, ...added]);
+      setBusy(false);
+    }
+  };
+
+  const addUrl = () => {
+    const v = url.trim();
+    if (!v) return;
+    if (!v.startsWith("/") && !/^https:\/\//.test(v)) return toast("Use an https:// URL or a /images/… path", "err");
+    setAll([...all, v]);
+    setUrl("");
+  };
+
+  return (
+    <div>
+      <span className="text-[12.5px] font-semibold text-slate-700">Images</span>
+      <div className="grid grid-cols-3 gap-2 mt-1">
+        {all.map((src, i) => (
+          <div key={src + i} className={cx("relative aspect-square rounded-lg border bg-white flex items-center justify-center overflow-hidden group", i === 0 ? "border-[var(--em-red)] ring-1 ring-[var(--em-red)]/30" : "border-slate-200")}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt="" className="max-w-full max-h-full object-contain" />
+            {i === 0 && <span className="absolute left-1 top-1 text-[9.5px] font-bold uppercase bg-[var(--em-red)] text-white rounded px-1">Main</span>}
+            <div className="absolute inset-x-0 bottom-0 flex justify-between p-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 bg-gradient-to-t from-black/40">
+              {i > 0 ? (
+                <button type="button" onClick={() => setAll([src, ...all.filter((_, j) => j !== i)])} className="text-[10px] font-semibold bg-white rounded px-1.5 py-0.5">Set main</button>
+              ) : <span />}
+              <button type="button" onClick={() => setAll(all.filter((_, j) => j !== i))} className="bg-white rounded p-0.5" aria-label="Remove image"><X size={12} /></button>
+            </div>
+          </div>
+        ))}
+        {all.length < 12 && (
+          <label className={cx("aspect-square rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center text-[11px] font-semibold text-slate-500 hover:border-[var(--em-red)] hover:text-[var(--em-red)] cursor-pointer", busy && "pointer-events-none opacity-60")}>
+            {busy ? <Loader2 size={18} className="animate-spin" /> : <ImagePlus size={18} />}
+            <span className="mt-1">{busy ? "Uploading…" : "Upload"}</span>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" multiple className="sr-only" onChange={(e) => { void upload(e.target.files); e.target.value = ""; }} />
+          </label>
+        )}
+      </div>
+      {all.length === 0 && <div className="text-[11.5px] text-slate-400 mt-1 flex items-center gap-1"><ImageOff size={12} /> No image yet</div>}
+      <div className="flex gap-1.5 mt-2">
+        <Input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }} placeholder="…or paste an image URL" className="!text-[12px] !py-1.5" />
+        <Button size="sm" onClick={addUrl}>Add</Button>
+      </div>
+      <p className="text-[11px] text-slate-400 mt-1">First image = main photo. JPG/PNG/WebP up to 4 MB.</p>
+    </div>
   );
 }

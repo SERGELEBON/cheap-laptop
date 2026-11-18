@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const query = z.object({
   q: z.string().trim().max(80).default(""),
-  area: z.enum(["", "auth", "product", "stock", "order", "staff"]).default(""),
+  area: z.enum(["", "auth", "product", "stock", "order", "staff", "location"]).default(""),
   page: z.coerce.number().int().min(1).max(1000).default(1),
   per: z.coerce.number().int().min(1).max(100).default(30),
 });

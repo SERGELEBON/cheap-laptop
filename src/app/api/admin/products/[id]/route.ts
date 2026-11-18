@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   if (!p) return NextResponse.json({ error: "Product not found" }, { status: 404 });
   const [movements, sold] = await Promise.all([
     can(g.staff.role, "stock:read")
-      ? db.stockMovement.findMany({ where: { productId: id }, orderBy: { createdAt: "desc" }, take: 30, include: { actor: { select: { email: true, name: true } } } })
+      ? db.stockMovement.findMany({ where: { productId: id }, orderBy: { createdAt: "desc" }, take: 30, include: { actor: { select: { email: true, name: true } }, location: { select: { name: true, code: true } } } })
       : [],
     db.orderItem.aggregate({ where: { productId: id, order: { status: { not: "cancelled" } } }, _sum: { qty: true } }),
   ]);
@@ -57,6 +57,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
   if (d.slug !== undefined) data.slug = d.slug;
   if (d.status !== undefined) data.status = d.status;
   if (d.image !== undefined) data.image = d.image || null;
+  if (d.gallery !== undefined) data.gallery = d.gallery.join("\n");
   if (d.categorySlugs !== undefined) data.categorySlugs = d.categorySlugs.join(",");
   if (d.brandSlug !== undefined) data.brandSlug = d.brandSlug || null;
   if (d.shortDescription !== undefined) data.shortDescription = d.shortDescription;

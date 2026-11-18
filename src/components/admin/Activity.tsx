@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Activity as ActivityIcon, Boxes, KeyRound, Package, ShoppingCart, Users } from "lucide-react";
+import { Activity as ActivityIcon, Boxes, KeyRound, MapPin, Package, ShoppingCart, Users } from "lucide-react";
 import { Avatar, Card, EmptyState, ErrorState, PageHeader, Pagination, SearchInput, Spinner, Tabs, fmtDate, timeAgo, useApi, useDebounced, usePage, } from "./ui";
 
 interface Log {
@@ -8,10 +8,10 @@ interface Log {
   actor: { name: string | null; image: string | null } | null;
 }
 
-const AREA_ICON: Record<string, typeof Package> = { auth: KeyRound, product: Package, stock: Boxes, order: ShoppingCart, staff: Users };
+const AREA_ICON: Record<string, typeof Package> = { auth: KeyRound, product: Package, stock: Boxes, order: ShoppingCart, staff: Users, location: MapPin };
 
 export function ActivityPage() {
-  const [area, setArea] = useState<"" | "auth" | "product" | "stock" | "order" | "staff">("");
+  const [area, setArea] = useState<"" | "auth" | "product" | "stock" | "order" | "staff" | "location">("");
   const [q, setQ] = useState("");
   const dq = useDebounced(q);
   const [page, setPage] = usePage([dq, area].join("|"));
@@ -25,7 +25,7 @@ export function ActivityPage() {
         <div className="px-4 pt-2">
           <Tabs value={area} onChange={setArea} items={[
             { value: "", label: "All" }, { value: "order", label: "Orders" }, { value: "product", label: "Products" },
-            { value: "stock", label: "Stock" }, { value: "staff", label: "Staff" }, { value: "auth", label: "Sign-ins" },
+            { value: "stock", label: "Stock" }, { value: "location", label: "Locations" }, { value: "staff", label: "Staff" }, { value: "auth", label: "Sign-ins" },
           ]} />
         </div>
         <div className="p-4"><SearchInput value={q} onChange={setQ} placeholder="Search activity or staff email…" /></div>

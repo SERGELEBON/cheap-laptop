@@ -47,10 +47,61 @@ model StaffUser {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  /// false = restricted to the locations in `locations` (branch staff)
+  allLocations   Boolean   @default(true)
+  locations      StaffLocation[]
+
   stockMovements StockMovement[]
   auditLogs      AuditLog[]
 
   @@index([inviteTokenHash])
+}
+
+/* ------------------------------------------------------------------ */
+/* Points of sale (shops / warehouses)                                 */
+/* ------------------------------------------------------------------ */
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  name      String // "Accra — Circle"
+  code      String   @unique // short code shown in tables, e.g. ACC
+  city      String
+  address   String   @default("")
+  phone     String   @default("")
+  /// Ghana regions this shop fulfils online orders for (comma-separated)
+  regions   String   @default("")
+  isMain    Boolean  @default(false) // receives orders from uncovered regions
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stocks    ProductStock[]
+  movements StockMovement[]
+  staff     StaffLocation[]
+  orders    Order[]
+}
+
+model StaffLocation {
+  staffId    Int
+  locationId Int
+  staff      StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  location   Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([staffId, locationId])
+}
+
+/// Stock of one product at one location. Product.stock = sum over locations.
+model ProductStock {
+  productId  Int
+  locationId Int
+  quantity   Int      @default(0)
+  updatedAt  DateTime @updatedAt
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([productId, locationId])
+  @@index([locationId])
 }
 
 model AuditLog {
@@ -98,13 +149,15 @@ model Product {
   description       String        @default("")
   averageRating     Float         @default(0)
   reviewCount       Int           @default(0)
-  stock             Int           @default(10)
-  lowStockThreshold Int           @default(3)
+  stock             Int           @default(10) // total across locations (kept in sync)
+  lowStockThreshold Int           @default(3) // alert level per location
+  gallery           String        @default("") // extra image URLs, newline-separated
   featured          Boolean       @default(false)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   movements StockMovement[]
+  stocks    ProductStock[]
 
   @@index([status])
 }
@@ -118,6 +171,8 @@ enum StockMovementType {
   DAMAGE // damaged / defective (-)
   LOSS // lost / stolen (-)
   COUNT // physical count correction (set absolute)
+  TRANSFER_OUT // sent to another location (-)
+  TRANSFER_IN // received from another location (+)
 }
 
 model StockMovement {
@@ -130,11 +185,15 @@ model StockMovement {
   stockAfter  Int
   note        String?
   orderId     Int?
+  locationId  Int?
+  location    Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
   actorId     Int?
   actor       StaffUser?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
   createdAt   DateTime          @default(now())
 
   @@index([productId, createdAt])
+  @@index([locationId, createdAt])
+  @@index([orderId])
 }
 
 /* ------------------------------------------------------------------ */
@@ -156,11 +215,14 @@ model Order {
   shipping     Int // pesewas
   total        Int // pesewas
   status       String      @default("pending") // pending | processing | shipped | delivered | cancelled
+  locationId   Int? // shop that fulfils the order
+  location     Location?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   items        OrderItem[]
 
   @@index([status, createdAt])
+  @@index([locationId])
 }
 
 model OrderItem {

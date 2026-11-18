@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/catalog-server";
 import { sameOrigin } from "@/lib/admin-auth";
 import { applyStockChange, StockError } from "@/lib/stock";
+import { ensureLocations, locationForRegion } from "@/lib/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -68,9 +69,13 @@ export async function POST(req: NextRequest) {
     const ref = "CL-" + Math.floor(100000 + Math.random() * 900000);
 
     /* create the order and decrement stock atomically (rows locked, no overselling) */
+    await ensureLocations();
     const order = await db.$transaction(async (tx) => {
+      /* the shop serving the customer's region fulfils the order */
+      const locationId = await locationForRegion(tx, customer.region);
       const created = await tx.order.create({
       data: {
+        locationId,
         ref,
         customerName: `${customer.firstName} ${customer.lastName}`.slice(0, 120),
         phone: customer.phone,
@@ -87,7 +92,17 @@ export async function POST(req: NextRequest) {
       },
       });
       for (const l of lines) {
-        await applyStockChange(tx, { productId: l.productId, type: "SALE", amount: l.qty, orderId: created.id, note: `Order ${created.ref}` });
+        /* take stock from the fulfilling shop; if it doesn't have enough, from the shop with the most stock */
+        let from = locationId;
+        const here = await tx.productStock.findUnique({ where: { productId_locationId: { productId: l.productId, locationId } } });
+        if (!here || here.quantity < l.qty) {
+          const best = await tx.productStock.findFirst({
+            where: { productId: l.productId, quantity: { gte: l.qty }, location: { active: true } },
+            orderBy: { quantity: "desc" },
+          });
+          if (best) from = best.locationId;
+        }
+        await applyStockChange(tx, { productId: l.productId, locationId: from, type: "SALE", amount: l.qty, orderId: created.id, note: `Order ${created.ref}` });
       }
       return created;
     });

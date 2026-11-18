@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   "orders:update",
   "staff:read",
   "staff:manage",
+  "locations:manage",
   "audit:read",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -82,6 +83,8 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 };
 
 export const STOCK_ADJUST_TYPES = ["RESTOCK", "RETURN", "DAMAGE", "LOSS", "COUNT"] as const;
+/** Roles that always see every location (others can be limited to some shops). */
+export const ALL_LOCATION_ROLES: Role[] = ["OWNER", "ADMIN"];
 export type StockAdjustType = (typeof STOCK_ADJUST_TYPES)[number];
 
 export const STOCK_TYPE_INFO: Record<string, { label: string; sign: "+" | "-" | "=" }> = {
@@ -93,4 +96,6 @@ export const STOCK_TYPE_INFO: Record<string, { label: string; sign: "+" | "-" | 
   DAMAGE: { label: "Damaged / defective", sign: "-" },
   LOSS: { label: "Lost / stolen", sign: "-" },
   COUNT: { label: "Stock count correction", sign: "=" },
+  TRANSFER_OUT: { label: "Transfer out", sign: "-" },
+  TRANSFER_IN: { label: "Transfer in", sign: "+" },
 };

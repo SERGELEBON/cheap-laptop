@@ -2,7 +2,7 @@
 /* Admin shell: Google sign-in gate, role-aware sidebar navigation, top bar. */
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import {
-  Activity, Boxes, ExternalLink, LayoutDashboard, Loader2, LogOut, Menu, Package, ShieldCheck, ShoppingCart, Users, X,
+  Activity, Boxes, ExternalLink, LayoutDashboard, Loader2, LogOut, MapPin, Menu, Package, ShieldCheck, ShoppingCart, Store, Users, X,
 } from "lucide-react";
 import { Toasts } from "@/components/em/chrome";
 import { useStore } from "@/lib/store";
@@ -14,10 +14,17 @@ import { InventoryPage } from "./Inventory";
 import { OrdersPage } from "./Orders";
 import { StaffPage } from "./Staff";
 import { ActivityPage } from "./Activity";
+import { LocationsPage } from "./Locations";
+
+export interface Loc { id: number; name: string; code: string; city?: string; isMain?: boolean }
 
 export interface Me {
-  user: { id: number; email: string; name: string | null; image: string | null; role: Role };
+  user: { id: number; email: string; name: string | null; image: string | null; role: Role; locationIds: number[] | null };
   permissions: Permission[];
+  /** shops this person can act on */
+  locations: Loc[];
+  /** every active shop (transfer / reassignment targets) */
+  allLocations: Loc[];
 }
 
 interface AdminCtx {
@@ -25,6 +32,11 @@ interface AdminCtx {
   can: (p: Permission) => boolean;
   toast: (msg: string, kind?: "ok" | "info" | "err") => void;
   go: (section: Section) => void;
+  /** global shop filter: null = all the shops this person can see */
+  activeLocation: number | null;
+  setActiveLocation: (id: number | null) => void;
+  /** true when this person is limited to some shops */
+  scoped: boolean;
 }
 const Ctx = createContext<AdminCtx | null>(null);
 export function useAdmin(): AdminCtx {
@@ -33,12 +45,13 @@ export function useAdmin(): AdminCtx {
   return c;
 }
 
-type Section = "overview" | "products" | "inventory" | "orders" | "staff" | "activity";
+type Section = "overview" | "products" | "inventory" | "orders" | "locations" | "staff" | "activity";
 const NAV: { key: Section; label: string; icon: typeof Package; perm: Permission; group: string }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard, perm: "dashboard:view", group: "Store" },
   { key: "orders", label: "Orders", icon: ShoppingCart, perm: "orders:read", group: "Store" },
   { key: "products", label: "Products", icon: Package, perm: "products:read", group: "Catalogue" },
   { key: "inventory", label: "Inventory", icon: Boxes, perm: "stock:read", group: "Catalogue" },
+  { key: "locations", label: "Locations", icon: Store, perm: "locations:manage", group: "Administration" },
   { key: "staff", label: "Staff & roles", icon: Users, perm: "staff:read", group: "Administration" },
   { key: "activity", label: "Activity log", icon: Activity, perm: "audit:read", group: "Administration" },
 ];
@@ -62,6 +75,14 @@ export function AdminApp() {
   const [section, setSection] = useState<Section>(sectionFromHash);
   const [mobileNav, setMobileNav] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(inviteTokenFromHash);
+  const [activeLocation, setActiveLocationState] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    try { const v = Number(localStorage.getItem("cl_admin_location")); return v > 0 ? v : null; } catch { return null; }
+  });
+  const setActiveLocation = useCallback((id: number | null) => {
+    setActiveLocationState(id);
+    try { if (id) localStorage.setItem("cl_admin_location", String(id)); else localStorage.removeItem("cl_admin_location"); } catch { /* storage unavailable */ }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,6 +126,11 @@ export function AdminApp() {
   const nav = NAV.filter((n) => can(n.perm));
   const current = nav.some((n) => n.key === section) ? section : nav[0]?.key ?? "overview";
   const groups = [...new Set(nav.map((n) => n.group))];
+  const scoped = me.user.locationIds !== null;
+  /* a remembered shop the person can no longer see is ignored; a single-shop person is fixed to it */
+  const effectiveLocation = me.locations.length === 1 && scoped
+    ? me.locations[0].id
+    : me.locations.some((l) => l.id === activeLocation) ? activeLocation : null;
 
   const logout = async (all = false) => {
     await fetch(`/api/admin/logout${all ? "?all=1" : ""}`, { method: "POST" }).catch(() => {});
@@ -149,7 +175,7 @@ export function AdminApp() {
   );
 
   return (
-    <Ctx.Provider value={{ me, can, toast, go }}>
+    <Ctx.Provider value={{ me, can, toast, go, activeLocation: effectiveLocation, setActiveLocation, scoped }}>
       <div className="min-h-screen bg-slate-50 text-slate-800">
         {/* desktop sidebar */}
         <aside className="hidden lg:block fixed inset-y-0 left-0 w-[248px] bg-[#0b1f3a] z-30">{sidebar}</aside>
@@ -167,7 +193,22 @@ export function AdminApp() {
         <div className="lg:pl-[248px]">
           <header className="sticky top-0 z-20 h-16 bg-white/90 backdrop-blur border-b border-slate-200 flex items-center gap-3 px-4 lg:px-8">
             <button onClick={() => setMobileNav(true)} className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-slate-100" aria-label="Open menu"><Menu size={20} /></button>
-            <div className="text-[13px] text-slate-500 hidden sm:block">Cheap Laptops Ghana</div>
+            <div className="text-[13px] text-slate-500 hidden xl:block">Cheap Laptops Ghana</div>
+            {me.locations.length > 0 && (
+              <label className="flex items-center gap-2 text-[13px]">
+                <MapPin size={16} className="text-slate-400" />
+                <span className="sr-only">Location</span>
+                <select
+                  value={effectiveLocation ?? ""}
+                  onChange={(e) => setActiveLocation(e.target.value ? Number(e.target.value) : null)}
+                  disabled={scoped && me.locations.length === 1}
+                  className="border border-slate-200 rounded-lg pl-2.5 pr-7 py-1.5 bg-white font-semibold text-slate-700 outline-none focus:border-[var(--em-red)] disabled:bg-slate-50"
+                >
+                  {!(scoped && me.locations.length === 1) && <option value="">{scoped ? "All my locations" : "All locations"}</option>}
+                  {me.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </label>
+            )}
             <div className="ml-auto flex items-center gap-3">
               <UserMenu me={me} onLogout={logout} />
             </div>
@@ -179,6 +220,7 @@ export function AdminApp() {
             {current === "orders" && <OrdersPage />}
             {current === "staff" && <StaffPage />}
             {current === "activity" && <ActivityPage />}
+            {current === "locations" && <LocationsPage />}
           </main>
         </div>
         <Toasts />

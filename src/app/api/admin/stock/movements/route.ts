@@ -3,12 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireStaff } from "@/lib/admin-auth";
+import { locationWhere } from "@/lib/locations";
 
 export const dynamic = "force-dynamic";
 
 const query = z.object({
   productId: z.coerce.number().int().positive().optional(),
-  type: z.enum(["", "INITIAL", "RESTOCK", "RETURN", "SALE", "CANCEL", "DAMAGE", "LOSS", "COUNT"]).default(""),
+  type: z.enum(["", "INITIAL", "RESTOCK", "RETURN", "SALE", "CANCEL", "DAMAGE", "LOSS", "COUNT", "TRANSFER_OUT", "TRANSFER_IN"]).default(""),
+  locationId: z.coerce.number().int().positive().optional(),
   page: z.coerce.number().int().min(1).max(1000).default(1),
   per: z.coerce.number().int().min(1).max(100).default(25),
 });
@@ -18,8 +20,8 @@ export async function GET(req: NextRequest) {
   if (!g.ok) return g.res;
   const parsed = query.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!parsed.success) return NextResponse.json({ error: "Invalid filters" }, { status: 400 });
-  const { productId, type, page, per } = parsed.data;
-  const where = { ...(productId ? { productId } : {}), ...(type ? { type } : {}) };
+  const { productId, type, page, per, locationId } = parsed.data;
+  const where = { ...(productId ? { productId } : {}), ...(type ? { type } : {}), ...locationWhere(g.staff, locationId) };
 
   try {
     const [total, rows] = await Promise.all([
@@ -32,6 +34,7 @@ export async function GET(req: NextRequest) {
         include: {
           product: { select: { id: true, name: true, sku: true, image: true } },
           actor: { select: { email: true, name: true } },
+          location: { select: { id: true, name: true, code: true } },
         },
       }),
     ]);

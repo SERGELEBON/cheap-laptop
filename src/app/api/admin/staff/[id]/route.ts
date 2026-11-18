@@ -15,6 +15,8 @@ const patchSchema = z.object({
   active: z.boolean().optional(),
   name: z.string().trim().max(80).optional(),
   revokeSessions: z.literal(true).optional(),
+  /** [] = all locations */
+  locationIds: z.array(z.number().int().positive()).max(50).optional(),
 });
 
 async function loadTarget(ctx: Ctx) {
@@ -39,7 +41,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   const d = parsed.data;
 
-  if (target.id === g.staff.id && (d.role !== undefined || d.active !== undefined)) {
+  if (target.id === g.staff.id && (d.role !== undefined || d.active !== undefined || d.locationIds !== undefined)) {
     return NextResponse.json({ error: "You can't change your own role or access" }, { status: 403 });
   }
   if (!canManageStaff(g.staff.role, target.role as Role)) {
@@ -67,6 +69,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (d.revokeSessions || data.role || d.active === false) {
     data.sessionVersion = { increment: 1 };
     if (d.revokeSessions) changes.push("signed out everywhere");
+  }
+  const newRole = (d.role ?? target.role) as Role;
+  if (d.locationIds !== undefined || (d.role && (newRole === "OWNER" || newRole === "ADMIN"))) {
+    const ids = newRole === "OWNER" || newRole === "ADMIN" ? [] : d.locationIds ?? [];
+    data.allLocations = ids.length === 0;
+    data.locations = { deleteMany: {}, create: ids.map((locationId) => ({ locationId })) };
+    if (d.locationIds !== undefined) {
+      changes.push(ids.length ? `locations set (${ids.length})` : "all locations");
+      data.sessionVersion = { increment: 1 }; // scope changed → re-validate sessions
+    }
   }
   if (Object.keys(data).length === 0) return NextResponse.json({ ok: true });
 

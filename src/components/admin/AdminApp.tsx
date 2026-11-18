@@ -225,7 +225,7 @@ const AUTH_ERRORS: Record<string, string> = {
   invalid_state: "The sign-in session expired. Please try again.",
   cancelled: "Sign-in was cancelled.",
   google_failed: "Google sign-in failed. Please try again.",
-  not_configured: "Google sign-in isn't available here. Use your email and password.",
+  not_configured: "Google sign-in is being activated. For now, please sign in with your email and password.",
   server_error: "Something went wrong on our side. Please try again.",
 };
 
@@ -238,6 +238,8 @@ function SignIn({ googleConfigured, dbDown }: { googleConfigured: boolean; dbDow
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   useEffect(() => {
     /* drop ?auth_error from the address bar once it has been shown */
     if (window.location.search.includes("auth_error")) {
@@ -261,28 +263,54 @@ function SignIn({ googleConfigured, dbDown }: { googleConfigured: boolean; dbDow
   return (
     <AuthLayout>
       <h1 className="text-2xl font-extrabold text-slate-900">Staff sign in</h1>
-      <p className="text-[13.5px] text-slate-500 mt-1.5 mb-7">Sign in with the email your administrator invited.</p>
+      <p className="text-[13.5px] text-slate-500 mt-1.5 mb-7">Choose how you want to sign in.</p>
       {(error || dbDown) && (
         <div className="text-[13px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5 mb-4" role="alert">
           {error || "The admin database is unavailable. Please try again shortly."}
         </div>
       )}
-      {googleConfigured && (
-        <>
-          <a href="/api/auth/google" className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-lg py-3 text-[14px] font-semibold text-slate-800 hover:bg-slate-50 shadow-sm transition-colors">
-            <GoogleIcon /> Continue with Google
-          </a>
-          <div className="flex items-center gap-3 my-5 text-[12px] text-slate-400"><span className="h-px flex-1 bg-slate-200" />or with email<span className="h-px flex-1 bg-slate-200" /></div>
-        </>
-      )}
-      <form onSubmit={submit} className="space-y-3.5">
-        <Field label="Email"><Input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
-        <Field label="Password"><Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
-        <Button type="submit" variant="primary" loading={busy} className="w-full !py-3">Sign in</Button>
+      {/* Option 1 — Google (any Google account, Gmail or not) */}
+      <a
+        href={googleConfigured ? "/api/auth/google" : undefined}
+        onClick={(e) => { if (!googleConfigured) { e.preventDefault(); setError(AUTH_ERRORS.not_configured); } }}
+        className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-lg py-3 text-[14px] font-semibold text-slate-800 bg-white hover:bg-slate-50 hover:border-slate-400 shadow-sm transition-colors cursor-pointer"
+      >
+        <GoogleIcon /> Continue with Google
+      </a>
+
+      <div className="flex items-center gap-3 my-6 text-[12px] font-medium text-slate-400 uppercase tracking-wide">
+        <span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" />
+      </div>
+
+      {/* Option 2 — email + password */}
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Email address">
+          <Input type="email" autoComplete="username" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </Field>
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="text-[12.5px] font-semibold text-slate-700">Password</span>
+            <button type="button" onClick={() => setShowHelp((v) => !v)} className="text-[12.5px] font-semibold text-[var(--em-red)] hover:underline">Forgot password?</button>
+          </div>
+          <div className="relative mt-1">
+            <Input type={showPw ? "text" : "password"} autoComplete="current-password" placeholder="••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pr-16" />
+            <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-slate-500 hover:text-slate-800 px-2 py-1" aria-label={showPw ? "Hide password" : "Show password"}>
+              {showPw ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
+        {showHelp && (
+          <div className="text-[12.5px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3">
+            For security, passwords are reset by an administrator: ask them for a <b>reset link</b> (Staff &amp; roles → Reset link). It works once and expires after 72 hours.
+          </div>
+        )}
+        <Button type="submit" variant="primary" loading={busy} className="w-full !py-3 !text-[14px]">Sign in</Button>
       </form>
-      <p className="text-[12px] text-slate-400 mt-6 leading-relaxed">
-        No password yet or forgot it? Ask an administrator for an access link. Access is by invitation only and every action is recorded.
-      </p>
+
+      <div className="mt-6 rounded-lg border border-dashed border-slate-200 px-4 py-3 text-[12.5px] text-slate-500">
+        <b className="text-slate-700">First time here?</b> Open the invitation link you received by WhatsApp or email to create your password — or use “Continue with Google” if your invited email is a Google account.
+      </div>
+      <p className="text-[11.5px] text-slate-400 mt-4">Access is by invitation only. Every action is recorded.</p>
       <div className="mt-6"><Button variant="ghost" size="sm" onClick={() => (window.location.hash = "#/")}>← Back to the store</Button></div>
     </AuthLayout>
   );

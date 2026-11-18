@@ -1,126 +1,156 @@
-/* Admin authentication — scrypt password hashing, HMAC-signed session cookie,
-   in-memory login rate limiting and same-origin enforcement. Server-side only. */
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
+/* Staff authentication — Google sign-in (OAuth 2.0 + PKCE), HMAC-signed
+   httpOnly session cookie, per-request revocation check against the DB, and
+   permission enforcement for API routes. Server-side only. */
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { can, type Permission, type Role } from "@/lib/rbac";
 
-const COOKIE_NAME = "cl_admin";
+export const SESSION_COOKIE = "cl_staff";
+const OAUTH_COOKIE = "cl_oauth";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
-function sessionSecret(): string {
-  // In production set ADMIN_SECRET in .env; fallback derives a stable dev secret.
-  return process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD || "cheap-laptops-dev-secret-2025";
+export interface StaffSession {
+  id: number;
+  email: string;
+  name: string | null;
+  image: string | null;
+  role: Role;
 }
 
-/* ---------- password hashing (scrypt, per-user random salt) ---------- */
-export function hashPassword(password: string): string {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
+function secret(): string {
+  const s = process.env.AUTH_SECRET;
+  if (s && s.length >= 32) return s;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET must be set (32+ random characters) in production");
+  }
+  return "dev-only-secret-change-me-dev-only-secret";
 }
 
-export function verifyPassword(password: string, stored: string): boolean {
-  const [salt, hash] = stored.split(":");
-  if (!salt || !hash) return false;
-  const candidate = scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, "hex");
-  if (candidate.length !== expected.length) return false;
-  return timingSafeEqual(candidate, expected);
-}
-
-/* ---------- signed session token ---------- */
+/* ---------------- signed tokens ---------------- */
 function sign(payload: string): string {
-  return createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
+  return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-export function createToken(username: string): string {
-  const payload = Buffer.from(JSON.stringify({ u: username, e: Date.now() + SESSION_TTL_MS })).toString("base64url");
+function encode(data: object): string {
+  const payload = Buffer.from(JSON.stringify(data)).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
-export function readToken(token: string | undefined): { username: string } | null {
+function decode<T>(token: string | undefined): T | null {
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
-  const expected = sign(payload);
   const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
+  const b = Buffer.from(sign(payload));
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
-    if (typeof data.u !== "string" || typeof data.e !== "number" || data.e < Date.now()) return null;
-    return { username: data.u };
+    return JSON.parse(Buffer.from(payload, "base64url").toString()) as T;
   } catch {
     return null;
   }
 }
 
-/* ---------- cookie helpers ---------- */
-export async function setSessionCookie(username: string) {
-  const jar = await cookies();
-  jar.set(COOKIE_NAME, createToken(username), {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_TTL_MS / 1000,
-  });
+/* ---------------- session cookie ---------------- */
+export function sessionCookieValue(userId: number, version: number): string {
+  return encode({ uid: userId, v: version, e: Date.now() + SESSION_TTL_MS });
 }
+
+export const sessionCookieOptions = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+  maxAge: SESSION_TTL_MS / 1000,
+};
 
 export async function clearSessionCookie() {
   const jar = await cookies();
-  jar.set(COOKIE_NAME, "", { httpOnly: true, sameSite: "strict", path: "/", maxAge: 0 });
+  jar.set(SESSION_COOKIE, "", { ...sessionCookieOptions, maxAge: 0 });
 }
 
-/* ---------- session check for API routes ---------- */
-export async function requireAdmin(): Promise<{ ok: true; username: string } | { ok: false }> {
+/** Reads the cookie AND re-checks the user in the DB, so disabling a staff
+    member or changing their role takes effect immediately. */
+export async function getStaff(): Promise<StaffSession | null> {
   const jar = await cookies();
-  const token = jar.get(COOKIE_NAME)?.value;
-  const session = readToken(token);
-  return session ? { ok: true, username: session.username } : { ok: false };
+  const data = decode<{ uid: number; v: number; e: number }>(jar.get(SESSION_COOKIE)?.value);
+  if (!data || typeof data.uid !== "number" || data.e < Date.now()) return null;
+  const user = await db.staffUser.findUnique({ where: { id: data.uid } });
+  if (!user || !user.active || user.sessionVersion !== data.v) return null;
+  return { id: user.id, email: user.email, name: user.name, image: user.image, role: user.role as Role };
 }
 
-/* ---------- login rate limiting (5 attempts / 15 min / IP) ---------- */
-const attempts = new Map<string, { n: number; first: number }>();
-const WINDOW = 15 * 60 * 1000;
-const MAX = 5;
+type Guard = { ok: true; staff: StaffSession } | { ok: false; res: NextResponse };
 
-export function rateLimit(key: string): { allowed: boolean; retryAfterSec: number } {
-  const now = Date.now();
-  const rec = attempts.get(key);
-  if (!rec || now - rec.first > WINDOW) {
-    attempts.set(key, { n: 1, first: now });
-    return { allowed: true, retryAfterSec: 0 };
+/** Use at the top of every admin route:
+    const g = await requireStaff("products:update", req); if (!g.ok) return g.res; */
+export async function requireStaff(permission: Permission, req?: Request): Promise<Guard> {
+  if (req && req.method !== "GET" && !sameOrigin(req)) {
+    return { ok: false, res: NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 }) };
   }
-  rec.n += 1;
-  if (rec.n > MAX) {
-    return { allowed: false, retryAfterSec: Math.ceil((rec.first + WINDOW - now) / 1000) };
+  let staff: StaffSession | null = null;
+  try {
+    staff = await getStaff();
+  } catch (e) {
+    console.error("auth: session check failed", e);
+    return { ok: false, res: NextResponse.json({ error: "Authentication service unavailable" }, { status: 503 }) };
   }
-  return { allowed: true, retryAfterSec: 0 };
+  if (!staff) return { ok: false, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  if (!can(staff.role, permission)) {
+    return { ok: false, res: NextResponse.json({ error: "You don't have permission to do this" }, { status: 403 }) };
+  }
+  return { ok: true, staff };
 }
 
-export function resetRateLimit(key: string) {
-  attempts.delete(key);
-}
-
-/* ---------- same-origin check (CSRF layer on mutations) ---------- */
+/* ---------------- CSRF: same-origin check on mutations ---------------- */
 export function sameOrigin(req: Request): boolean {
   const origin = req.headers.get("origin");
-  if (!origin) return true; // non-browser clients (curl, same-site server calls)
+  if (!origin) return true; // non-browser clients
   try {
-    const host = req.headers.get("host");
-    return new URL(origin).host === host;
+    return new URL(origin).host === req.headers.get("host");
   } catch {
     return false;
   }
 }
 
-/* ---------- ensure an admin user exists (seed from env) ---------- */
-export async function ensureAdminUser() {
-  const count = await db.adminUser.count();
-  if (count === 0) {
-    const username = process.env.ADMIN_USERNAME || "admin";
-    const password = process.env.ADMIN_PASSWORD || "CheapAdmin2025!";
-    await db.adminUser.create({ data: { username, passwordHash: hashPassword(password) } });
-  }
+export function clientIp(req: Request): string | null {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+}
+
+/* ---------------- Google OAuth helpers ---------------- */
+export function googleConfigured(): boolean {
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+}
+
+export function appOrigin(req: Request): string {
+  return (process.env.APP_URL || new URL(req.url).origin).replace(/\/$/, "");
+}
+
+export function googleRedirectUri(req: Request): string {
+  return `${appOrigin(req)}/api/auth/google/callback`;
+}
+
+export function newOAuthState(): { state: string; verifier: string; challenge: string; cookie: string } {
+  const state = randomBytes(24).toString("base64url");
+  const verifier = randomBytes(48).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const cookie = encode({ s: state, v: verifier, e: Date.now() + 10 * 60 * 1000 });
+  return { state, verifier, challenge, cookie };
+}
+
+export function readOAuthState(value: string | undefined): { state: string; verifier: string } | null {
+  const d = decode<{ s: string; v: string; e: number }>(value);
+  if (!d || d.e < Date.now()) return null;
+  return { state: d.s, verifier: d.v };
+}
+
+export const oauthCookie = { name: OAUTH_COOKIE, options: { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/api/auth", maxAge: 600 } };
+
+/** Comma-separated list of emails that become OWNER on first sign-in (bootstrap). */
+export function ownerEmails(): string[] {
+  return (process.env.OWNER_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
 }

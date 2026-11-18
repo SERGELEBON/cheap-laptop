@@ -22,7 +22,6 @@ export default function Page() {
 
   useEffect(() => {
     if (cache) return;
-    setLoadError(false);
     fetch("/api/catalog")
       .then((r) => {
         if (!r.ok) throw new Error(`catalog HTTP ${r.status}`);
@@ -43,6 +42,9 @@ export default function Page() {
       });
   }, [attempt]);
 
+  /* The staff dashboard is a full-screen app: no store chrome, no catalogue needed */
+  if (view.name === "admin") return <AdminApp />;
+
   return (
     <div className="min-h-screen flex flex-col bg-white text-foreground">
       <Topbar />
@@ -57,7 +59,7 @@ export default function Page() {
           <Footer />
         </>
       ) : (
-        <Splash error={loadError} onRetry={() => setAttempt((a) => a + 1)} />
+        <Splash error={loadError} onRetry={() => { setLoadError(false); setAttempt((a) => a + 1); }} />
       )}
       <MobileBottomNav />
       <WhatsAppFloat />

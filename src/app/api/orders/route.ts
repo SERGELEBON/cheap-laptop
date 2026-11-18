@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ensureSeeded } from "@/lib/catalog-server";
 import { sameOrigin } from "@/lib/admin-auth";
+import { applyStockChange, StockError } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     /* Resolve prices from the DB — never trust client prices */
     const ids = items.map((i) => i.id);
-    const products = await db.product.findMany({ where: { id: { in: ids }, stock: { gt: 0 } } });
+    const products = await db.product.findMany({ where: { id: { in: ids }, status: "ACTIVE", stock: { gt: 0 } } });
     if (products.length === 0) {
       return NextResponse.json({ error: "Products unavailable" }, { status: 400 });
     }
@@ -66,7 +67,9 @@ export async function POST(req: NextRequest) {
     const total = subtotal + shipping;
     const ref = "CL-" + Math.floor(100000 + Math.random() * 900000);
 
-    const order = await db.order.create({
+    /* create the order and decrement stock atomically (rows locked, no overselling) */
+    const order = await db.$transaction(async (tx) => {
+      const created = await tx.order.create({
       data: {
         ref,
         customerName: `${customer.firstName} ${customer.lastName}`.slice(0, 120),
@@ -82,6 +85,11 @@ export async function POST(req: NextRequest) {
         total,
         items: { create: lines },
       },
+      });
+      for (const l of lines) {
+        await applyStockChange(tx, { productId: l.productId, type: "SALE", amount: l.qty, orderId: created.id, note: `Order ${created.ref}` });
+      }
+      return created;
     });
 
     return NextResponse.json({
@@ -92,6 +100,9 @@ export async function POST(req: NextRequest) {
       items: lines.map((l) => ({ name: l.name, qty: l.qty, priceFmt: ghs(l.price * l.qty) })),
     });
   } catch (e) {
+    if (e instanceof StockError && e.code === "INSUFFICIENT") {
+      return NextResponse.json({ error: e.message }, { status: 409 });
+    }
     console.error("order error", e);
     return NextResponse.json({ error: "Failed to place order" }, { status: 500 });
   }

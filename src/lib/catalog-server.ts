@@ -34,7 +34,7 @@ export async function ensureSeeded(): Promise<void> {
   const count = await db.product.count();
   if (count === 0) {
     const seed = seedProductsJson as unknown as SeedProduct[];
-    /* chunked insert to stay within SQLite parameter limits */
+    /* chunked insert */
     for (let i = 0; i < seed.length; i += 10) {
       const chunk = seed.slice(i, i + 10);
       await db.product.createMany({
@@ -74,7 +74,7 @@ type Row = Omit<SeedProduct, "categorySlugs" | "image"> & { id: number; category
 async function loadRows(): Promise<Row[]> {
   try {
     await ensureSeeded();
-    return await db.product.findMany({ orderBy: { id: "asc" } });
+    return await db.product.findMany({ where: { status: "ACTIVE" }, orderBy: { id: "asc" } });
   } catch (e) {
     console.error("catalog: DB unavailable, serving static seed", e);
     return (seedProductsJson as unknown as SeedProduct[]).map((p, i) => ({

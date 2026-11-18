@@ -1,65 +1,85 @@
-/* Dashboard statistics — session-protected aggregation queries */
-import { NextResponse } from "next/server";
+/* Dashboard KPIs. Finance figures are only returned to roles with finance:view. */
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireStaff } from "@/lib/admin-auth";
+import { can } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const DAY = 24 * 60 * 60 * 1000;
+
+export async function GET(req: NextRequest) {
+  const g = await requireStaff("dashboard:view", req);
+  if (!g.ok) return g.res;
+  const finance = can(g.staff.role, "finance:view");
+  const showOrders = can(g.staff.role, "orders:read");
 
   try {
-    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    const since30 = new Date(Date.now() - 29 * DAY);
+    since30.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const [orders, products, revenueAgg, recent, topItems] = await Promise.all([
-      db.order.findMany({ select: { status: true, total: true, createdAt: true } }),
-      db.product.findMany({ select: { id: true, stock: true, name: true } }),
-      db.order.aggregate({ _sum: { total: true }, where: { status: { not: "cancelled" } } }),
-      db.order.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 6,
-        select: { ref: true, customerName: true, total: true, status: true, createdAt: true, payment: true },
-      }),
-      db.orderItem.groupBy({
-        by: ["name"],
-        _sum: { qty: true },
-        orderBy: { _sum: { qty: "desc" } },
-        take: 6,
-      }),
+    const [products, orders30, byStatusRaw, recent, topItems, revenueAll] = await Promise.all([
+      db.product.findMany({ where: { status: { not: "ARCHIVED" } }, select: { id: true, name: true, sku: true, image: true, stock: true, lowStockThreshold: true, price: true, costPrice: true, status: true } }),
+      db.order.findMany({ where: { createdAt: { gte: since30 } }, select: { total: true, status: true, createdAt: true } }),
+      db.order.groupBy({ by: ["status"], _count: { _all: true } }),
+      showOrders
+        ? db.order.findMany({ orderBy: { createdAt: "desc" }, take: 6, select: { id: true, ref: true, customerName: true, total: true, status: true, createdAt: true } })
+        : [],
+      db.orderItem.groupBy({ by: ["name"], where: { order: { status: { not: "cancelled" } } }, _sum: { qty: true }, orderBy: { _sum: { qty: "desc" } }, take: 6 }),
+      finance ? db.order.aggregate({ _sum: { total: true }, where: { status: { not: "cancelled" } } }) : null,
     ]);
 
-    /* revenue per day, last 14 days */
-    const days: { date: string; revenue: number }[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-      const key = d.toISOString().slice(0, 10);
-      days.push({ date: key, revenue: 0 });
-    }
-    const dayMap = new Map(days.map((d) => [d.date, d]));
-    for (const o of orders) {
+    /* revenue & orders per day, last 30 days */
+    const days = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(since30.getTime() + i * DAY);
+      return { key: d.toISOString().slice(0, 10), label: d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }), revenue: 0, orders: 0 };
+    });
+    const map = new Map(days.map((d) => [d.key, d]));
+    let revenue30 = 0;
+    let ordersToday = 0;
+    for (const o of orders30) {
+      if (o.createdAt >= today) ordersToday++;
       if (o.status === "cancelled") continue;
-      const key = o.createdAt.toISOString().slice(0, 10);
-      const bucket = dayMap.get(key);
-      if (bucket) bucket.revenue += o.total / 100;
+      const b = map.get(o.createdAt.toISOString().slice(0, 10));
+      if (b) { b.revenue += o.total / 100; b.orders++; }
+      revenue30 += o.total;
     }
+    const validOrders30 = orders30.filter((o) => o.status !== "cancelled").length;
 
-    const byStatus: Record<string, number> = {};
-    for (const o of orders) byStatus[o.status] = (byStatus[o.status] || 0) + 1;
-
-    const lowStock = products.filter((p) => p.stock <= 2);
+    const active = products.filter((p) => p.status === "ACTIVE");
+    const out = products.filter((p) => p.stock <= 0);
+    const low = products.filter((p) => p.stock > 0 && p.stock <= p.lowStockThreshold);
+    const units = products.reduce((a, p) => a + Math.max(0, p.stock), 0);
+    const byStatus = Object.fromEntries(byStatusRaw.map((s) => [s.status, s._count._all]));
 
     return NextResponse.json({
-      revenueTotal: revenueAgg._sum.total ?? 0,
-      ordersCount: orders.length,
-      productsCount: products.length,
-      lowStockCount: lowStock.length,
-      lowStock,
-      byStatus,
-      revenueByDay: days.map((d) => ({ date: d.date.slice(5), revenue: Math.round(d.revenue * 100) / 100 })),
-      recentOrders: recent.map((o) => ({ ...o, totalFmt: (o.total / 100).toFixed(2) })),
+      finance,
+      showOrders,
+      kpis: {
+        revenueTotal: finance ? revenueAll?._sum.total ?? 0 : null,
+        revenue30: finance ? revenue30 : null,
+        avgOrder30: finance && validOrders30 ? Math.round(revenue30 / validOrders30) : finance ? 0 : null,
+        orders30: validOrders30,
+        ordersToday,
+        pendingOrders: (byStatus.pending ?? 0) + (byStatus.processing ?? 0),
+        productsActive: active.length,
+        productsTotal: products.length,
+        unitsInStock: units,
+        stockValueRetail: finance ? products.reduce((a, p) => a + Math.max(0, p.stock) * p.price, 0) : null,
+        stockValueCost: finance ? products.reduce((a, p) => a + Math.max(0, p.stock) * (p.costPrice ?? 0), 0) : null,
+        lowStock: low.length,
+        outOfStock: out.length,
+      },
+      byStatus: showOrders ? byStatus : {},
+      daily: days.map((d) => ({ date: d.label, revenue: finance ? Math.round(d.revenue * 100) / 100 : 0, orders: d.orders })),
+      recentOrders: recent,
       topProducts: topItems.map((t) => ({ name: t.name, qty: t._sum.qty ?? 0 })),
-      since: since.toISOString(),
+      stockAlerts: [...out, ...low]
+        .sort((a, b) => a.stock - b.stock)
+        .slice(0, 8)
+        .map((p) => ({ id: p.id, name: p.name, sku: p.sku, image: p.image, stock: p.stock, threshold: p.lowStockThreshold })),
     });
   } catch (e) {
     console.error("stats error", e);

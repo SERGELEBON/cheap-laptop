@@ -1,33 +1,49 @@
-/* Admin order list */
+/* Admin order list — search, status filter, pagination */
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireStaff } from "@/lib/admin-auth";
+import { ORDER_STATUSES } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES = ["pending", "processing", "shipped", "delivered", "cancelled"];
+const query = z.object({
+  q: z.string().trim().max(80).default(""),
+  status: z.enum(["", ...ORDER_STATUSES]).default(""),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  per: z.coerce.number().int().min(1).max(100).default(15),
+});
 
 export async function GET(req: NextRequest) {
-  const session = await requireAdmin();
-  if (!session.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const g = await requireStaff("orders:read", req);
+  if (!g.ok) return g.res;
+  const parsed = query.safeParse(Object.fromEntries(new URL(req.url).searchParams));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid filters" }, { status: 400 });
+  const { q, status, page, per } = parsed.data;
 
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status") || "";
-  const page = Math.max(1, Math.min(500, Number(searchParams.get("page") || 1) || 1));
-  const per = Math.max(1, Math.min(50, Number(searchParams.get("per") || 10) || 10));
+  const where = {
+    ...(status ? { status } : {}),
+    ...(q
+      ? {
+          OR: [
+            { ref: { contains: q, mode: "insensitive" as const } },
+            { customerName: { contains: q, mode: "insensitive" as const } },
+            { phone: { contains: q } },
+          ],
+        }
+      : {}),
+  };
 
-  const where = STATUSES.includes(status) ? { status } : {};
-
-  const [total, rows] = await Promise.all([
-    db.order.count({ where }),
-    db.order.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * per,
-      take: per,
-      include: { items: true },
-    }),
-  ]);
-
-  return NextResponse.json({ total, page, per, rows });
+  try {
+    const [total, rows, counts] = await Promise.all([
+      db.order.count({ where }),
+      db.order.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * per, take: per, include: { items: true } }),
+      db.order.groupBy({ by: ["status"], _count: { _all: true } }),
+    ]);
+    const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count._all]));
+    return NextResponse.json({ total, page, per, rows, byStatus });
+  } catch (e) {
+    console.error("orders list", e);
+    return NextResponse.json({ error: "Failed to load orders" }, { status: 500 });
+  }
 }

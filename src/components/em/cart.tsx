@@ -171,20 +171,9 @@ export function CheckoutView() {
       });
       clearCart();
       navigate({ name: "order-success", orderId: data.ref });
-    } catch {
-      /* Offline fallback — keep the order locally so the customer still gets a receipt */
-      const id = "CL-" + Math.floor(100000 + Math.random() * 900000);
-      placeOrder({
-        id,
-        date: new Date().toLocaleString("en-GB"),
-        total,
-        totalFmt: money(total),
-        lines: cart.map((c) => ({ name: c.name, qty: c.qty, priceFmt: money(c.price * c.qty) })),
-        payment: payLabel,
-        name: `${form.firstName} ${form.lastName}`,
-      });
-      clearCart();
-      navigate({ name: "order-success", orderId: id });
+    } catch (e) {
+      /* Never fake a successful order: the shop would never receive it. */
+      toast(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "We couldn't place your order. Please check your connection and try again, or call 0240 999979.", "err");
     } finally {
       setPlacing(false);
     }

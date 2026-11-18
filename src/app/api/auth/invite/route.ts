@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 async function findByToken(token: string | null | undefined) {
   if (!token || token.length < 20 || token.length > 100) return null;
-  const user = await db.staffUser.findUnique({ where: { inviteTokenHash: hashToken(token) } });
+  const user = await db.staffUser.findFirst({ where: { inviteTokenHash: hashToken(token) } });
   if (!user || !user.active || !user.inviteExpiresAt || user.inviteExpiresAt < new Date()) return null;
   return user;
 }

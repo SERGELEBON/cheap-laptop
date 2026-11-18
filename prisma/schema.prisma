@@ -33,7 +33,7 @@ model StaffUser {
   googleSub      String?   @unique // bound on first Google sign-in
   passwordHash   String? // scrypt "salt:hash" — for staff without a Google account
   passwordSetAt  DateTime?
-  inviteTokenHash String?  @unique // sha256 of the one-time invite / reset link token
+  inviteTokenHash String? // sha256 of the one-time invite / reset link token (indexed below)
   inviteExpiresAt DateTime?
   failedLogins   Int       @default(0)
   lockedUntil    DateTime?
@@ -49,6 +49,8 @@ model StaffUser {
 
   stockMovements StockMovement[]
   auditLogs      AuditLog[]
+
+  @@index([inviteTokenHash])
 }
 
 model AuditLog {

@@ -1,6 +1,14 @@
 # Admin dashboard — setup & roles
 
-The staff dashboard lives at **`/#/admin`**. Staff sign in with **Google**; access is **invite-only** and every action is written to the **activity log**.
+The staff dashboard lives at **`/#/admin`**. Staff sign in with **Google** or with **email + password**. Access is **invite-only** and every action is written to the **activity log**.
+
+## Signing in
+
+- **Google**: works for any Google account (Gmail or another address registered with Google). The email must match the invitation.
+- **Email + password** (no Google account needed): when you invite someone, the dashboard creates a **one-time access link**, valid 72 h. Send it by WhatsApp or email; they open it and choose their password. The link is in the URL fragment (`#/admin/invite/…`), so it never reaches server logs.
+- **Forgot password**: in *Staff & roles*, click **Reset link** next to the person and send them the new link. Setting a new password signs out all their other sessions.
+- 5 wrong passwords lock the account for 15 minutes.
+- The first owner signs in with Google (`OWNER_EMAILS`). They can then create a password for themselves with **Access link** on their own row.
 
 ## 1. Database (Neon PostgreSQL via Vercel)
 

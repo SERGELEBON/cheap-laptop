@@ -7,7 +7,7 @@ import {
 import { Toasts } from "@/components/em/chrome";
 import { useStore } from "@/lib/store";
 import { ROLE_INFO, type Permission, type Role } from "@/lib/rbac";
-import { Avatar, Button, RoleBadge, api, cx } from "./ui";
+import { Avatar, Button, Field, Input, RoleBadge, api, cx } from "./ui";
 import { Overview } from "./Overview";
 import { ProductsPage } from "./Products";
 import { InventoryPage } from "./Inventory";
@@ -43,6 +43,12 @@ const NAV: { key: Section; label: string; icon: typeof Package; perm: Permission
   { key: "activity", label: "Activity log", icon: Activity, perm: "audit:read", group: "Administration" },
 ];
 
+function inviteTokenFromHash(): string | null {
+  if (typeof window === "undefined") return null;
+  const m = window.location.hash.match(/^#\/admin\/invite\/([A-Za-z0-9_-]{20,100})/);
+  return m ? m[1] : null;
+}
+
 function sectionFromHash(): Section {
   if (typeof window === "undefined") return "overview";
   const s = window.location.hash.replace(/^#\/?/, "").split(/[/?]/)[1] as Section | undefined;
@@ -55,6 +61,7 @@ export function AdminApp() {
   const [status, setStatus] = useState<{ googleConfigured: boolean; dbDown: boolean }>({ googleConfigured: true, dbDown: false });
   const [section, setSection] = useState<Section>(sectionFromHash);
   const [mobileNav, setMobileNav] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(inviteTokenFromHash);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +83,7 @@ export function AdminApp() {
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
-    const onHash = () => setSection(sectionFromHash());
+    const onHash = () => { setSection(sectionFromHash()); setInviteToken(inviteTokenFromHash()); };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -88,6 +95,7 @@ export function AdminApp() {
     window.scrollTo({ top: 0 });
   }, []);
 
+  if (inviteToken) return <AcceptInvite token={inviteToken} />;
   if (me === undefined) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 size={28} className="animate-spin text-[var(--em-red)]" /></div>;
   }
@@ -106,8 +114,10 @@ export function AdminApp() {
   const sidebar = (
     <nav className="flex flex-col h-full" aria-label="Admin navigation">
       <div className="px-5 h-16 flex items-center gap-2.5 border-b border-white/10">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/cl/logo.svg" alt="Cheap Laptops" className="h-8 brightness-0 invert" />
+        <span className="bg-white rounded-lg px-2 py-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/cl/logo.svg" alt="Cheap Laptops" className="h-7" />
+        </span>
         <span className="text-[10px] font-bold uppercase tracking-widest text-white/60 border border-white/20 rounded px-1.5 py-0.5">Admin</span>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
@@ -215,30 +225,141 @@ const AUTH_ERRORS: Record<string, string> = {
   invalid_state: "The sign-in session expired. Please try again.",
   cancelled: "Sign-in was cancelled.",
   google_failed: "Google sign-in failed. Please try again.",
-  not_configured: "Google sign-in isn't configured yet (missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).",
+  not_configured: "Google sign-in isn't available here. Use your email and password.",
   server_error: "Something went wrong on our side. Please try again.",
 };
 
 function SignIn({ googleConfigured, dbDown }: { googleConfigured: boolean; dbDown: boolean }) {
-  const [error] = useState<string | null>(() => {
+  const [error, setError] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     const code = new URLSearchParams(window.location.search).get("auth_error");
     return code ? AUTH_ERRORS[code] || AUTH_ERRORS.server_error : null;
   });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     /* drop ?auth_error from the address bar once it has been shown */
     if (window.location.search.includes("auth_error")) {
       window.history.replaceState(null, "", window.location.pathname + window.location.hash);
     }
   }, []);
-  const notice = !googleConfigured ? AUTH_ERRORS.not_configured : dbDown ? "The admin database is unavailable (check DATABASE_URL)." : null;
 
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await api("/api/auth/login", { method: "POST", json: { email, password } });
+      window.location.reload();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AuthLayout>
+      <h1 className="text-2xl font-extrabold text-slate-900">Staff sign in</h1>
+      <p className="text-[13.5px] text-slate-500 mt-1.5 mb-7">Sign in with the email your administrator invited.</p>
+      {(error || dbDown) && (
+        <div className="text-[13px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5 mb-4" role="alert">
+          {error || "The admin database is unavailable. Please try again shortly."}
+        </div>
+      )}
+      {googleConfigured && (
+        <>
+          <a href="/api/auth/google" className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-lg py-3 text-[14px] font-semibold text-slate-800 hover:bg-slate-50 shadow-sm transition-colors">
+            <GoogleIcon /> Continue with Google
+          </a>
+          <div className="flex items-center gap-3 my-5 text-[12px] text-slate-400"><span className="h-px flex-1 bg-slate-200" />or with email<span className="h-px flex-1 bg-slate-200" /></div>
+        </>
+      )}
+      <form onSubmit={submit} className="space-y-3.5">
+        <Field label="Email"><Input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
+        <Field label="Password"><Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
+        <Button type="submit" variant="primary" loading={busy} className="w-full !py-3">Sign in</Button>
+      </form>
+      <p className="text-[12px] text-slate-400 mt-6 leading-relaxed">
+        No password yet or forgot it? Ask an administrator for an access link. Access is by invitation only and every action is recorded.
+      </p>
+      <div className="mt-6"><Button variant="ghost" size="sm" onClick={() => (window.location.hash = "#/")}>← Back to the store</Button></div>
+    </AuthLayout>
+  );
+}
+
+function AcceptInvite({ token }: { token: string }) {
+  const [info, setInfo] = useState<{ email: string; name: string | null; role: string; mode: "invite" | "reset" } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<{ email: string; name: string | null; role: string; mode: "invite" | "reset" }>("/api/auth/invite", { method: "POST", json: { token } })
+      .then((d) => { if (!cancelled) setInfo(d); })
+      .catch((e) => { if (!cancelled) setError((e as Error).message); });
+    return () => { cancelled = true; };
+  }, [token]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (pw !== pw2) return setError("The two passwords don't match.");
+    setBusy(true);
+    try {
+      await api("/api/auth/invite", { method: "POST", json: { token, password: pw, name: name.trim() || undefined } });
+      window.location.replace("/#/admin");
+      window.location.reload();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AuthLayout>
+      {!info && !error && <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-[var(--em-red)]" /></div>}
+      {!info && error && (
+        <>
+          <h1 className="text-2xl font-extrabold text-slate-900">Link expired</h1>
+          <p className="text-[13.5px] text-slate-500 mt-2">{error}</p>
+          <div className="mt-6"><Button onClick={() => (window.location.hash = "#/admin")}>Go to sign in</Button></div>
+        </>
+      )}
+      {info && (
+        <>
+          <h1 className="text-2xl font-extrabold text-slate-900">{info.mode === "reset" ? "Choose a new password" : "Welcome to the team"}</h1>
+          <p className="text-[13.5px] text-slate-500 mt-1.5 mb-6">
+            {info.mode === "reset" ? "Set a new password for " : "You've been invited as "}
+            {info.mode === "invite" && <b className="text-slate-700">{info.role}</b>}
+            {info.mode === "invite" ? " — " : ""}<b className="text-slate-700">{info.email}</b>
+          </p>
+          {error && <div className="text-[13px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5 mb-4" role="alert">{error}</div>}
+          <form onSubmit={submit} className="space-y-3.5">
+            <input type="email" value={info.email} autoComplete="username" readOnly hidden />
+            {info.mode === "invite" && !info.name && <Field label="Your name"><Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" /></Field>}
+            <Field label="Password" hint="At least 10 characters, with letters and numbers."><Input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></Field>
+            <Field label="Confirm password"><Input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} required /></Field>
+            <Button type="submit" variant="primary" loading={busy} className="w-full !py-3">{info.mode === "reset" ? "Save and sign in" : "Create my access"}</Button>
+          </form>
+        </>
+      )}
+    </AuthLayout>
+  );
+}
+
+function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-white">
       <div className="hidden lg:flex flex-col justify-between bg-[#0b1f3a] text-white p-12 relative overflow-hidden">
         <div className="absolute -right-24 -top-24 w-96 h-96 rounded-full bg-[var(--em-red)]/30 blur-3xl" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/cl/logo.svg" alt="Cheap Laptops Ghana" className="h-10 w-fit brightness-0 invert relative" />
+        <div className="relative inline-flex w-fit bg-white rounded-xl px-3 py-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/cl/logo.svg" alt="Cheap Laptops Ghana" className="h-8" />
+        </div>
         <div className="relative">
           <h2 className="text-3xl font-extrabold leading-tight">Run your store<br />from one place.</h2>
           <p className="text-white/70 mt-3 max-w-sm text-[14px]">Orders, catalogue, stock levels and your team — with access tailored to each role.</p>
@@ -249,25 +370,7 @@ function SignIn({ googleConfigured, dbDown }: { googleConfigured: boolean; dbDow
         <div className="w-full max-w-[380px]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/images/cl/logo.svg" alt="Cheap Laptops Ghana" className="h-10 mb-8 lg:hidden" />
-          <h1 className="text-2xl font-extrabold text-slate-900">Staff sign in</h1>
-          <p className="text-[13.5px] text-slate-500 mt-1.5 mb-7">Use the Google account your administrator invited.</p>
-          {(error || notice) && (
-            <div className="text-[13px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5 mb-4" role="alert">{error || notice}</div>
-          )}
-          <a
-            href="/api/auth/google"
-            aria-disabled={!googleConfigured}
-            className={cx(
-              "w-full flex items-center justify-center gap-3 border border-slate-300 rounded-lg py-3 text-[14px] font-semibold text-slate-800 hover:bg-slate-50 shadow-sm transition-colors",
-              !googleConfigured && "pointer-events-none opacity-50"
-            )}
-          >
-            <GoogleIcon /> Continue with Google
-          </a>
-          <p className="text-[12px] text-slate-400 mt-6 leading-relaxed">
-            Access is by invitation only. Every action in the dashboard is recorded in the activity log.
-          </p>
-          <div className="mt-8"><Button variant="ghost" size="sm" onClick={() => (window.location.hash = "#/")}>← Back to the store</Button></div>
+          {children}
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Check, LogOut, Minus, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Check, Copy, KeyRound, Link2, LogOut, Mail, MessageCircle, Minus, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { useAdmin } from "./AdminApp";
 import {
   Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input, Modal, PageHeader, RoleBadge, Select, Spinner,
@@ -11,6 +11,7 @@ import { canManageStaff, PERMISSIONS, ROLES, ROLE_INFO, ROLE_PERMISSIONS, type P
 interface StaffRow {
   id: number; email: string; name: string | null; image: string | null; role: Role; active: boolean;
   lastLoginAt: string | null; createdAt: string; hasSignedIn: boolean; invitedBy: { email: string } | null;
+  hasGoogle: boolean; hasPassword: boolean; linkPending: boolean;
 }
 
 const PERM_LABELS: Record<Permission, string> = {
@@ -35,6 +36,15 @@ export function StaffPage() {
   const [inviting, setInviting] = useState(false);
   const [removing, setRemoving] = useState<StaffRow | null>(null);
   const [showMatrix, setShowMatrix] = useState(false);
+  const [link, setLink] = useState<{ url: string; email: string; reset: boolean } | null>(null);
+
+  const newLink = async (s: StaffRow) => {
+    try {
+      const d = await api<{ url: string; email: string }>(`/api/admin/staff/${s.id}/link`, { method: "POST" });
+      setLink({ url: d.url, email: d.email, reset: s.hasPassword });
+      reload();
+    } catch (e) { toast((e as Error).message, "err"); }
+  };
   const manage = can("staff:manage");
 
   const patch = async (s: StaffRow, body: Record<string, unknown>, msg: string) => {
@@ -89,10 +99,18 @@ export function StaffPage() {
                       </td>
                       <td className={td}>
                         {!s.active ? <Badge color="#64748b" dot>Disabled</Badge> : s.hasSignedIn ? <Badge color="#16a34a" dot>Active</Badge> : <Badge color="#d97706" dot>Invited</Badge>}
+                        <div className="text-[11px] text-slate-400 mt-1">
+                          {[s.hasGoogle && "Google", s.hasPassword && "Password"].filter(Boolean).join(" · ") || (s.linkPending ? "Link sent, not used yet" : "No access link")}
+                        </div>
                       </td>
                       <td className={cx(td, "text-slate-500 text-[12px]")}>{s.hasSignedIn ? timeAgo(s.lastLoginAt) : `Invited ${timeAgo(s.createdAt)}${s.invitedBy ? ` by ${s.invitedBy.email}` : ""}`}</td>
                       {manage && (
                         <td className={cx(td, "text-right whitespace-nowrap")}>
+                          {(editable || self) && s.active && (
+                            <Button size="sm" variant="ghost" icon={s.hasPassword ? KeyRound : Link2} onClick={() => newLink(s)} title={s.hasPassword ? "Create a password reset link" : "Create an invitation link"}>
+                              {s.hasPassword ? "Reset link" : "Access link"}
+                            </Button>
+                          )}
                           {editable && <>
                             <Button size="sm" variant="ghost" onClick={() => patch(s, { active: !s.active }, s.active ? `Access disabled for ${s.email}` : `Access restored for ${s.email}`)}>{s.active ? "Disable" : "Enable"}</Button>
                             {s.active && s.hasSignedIn && <Button size="sm" variant="ghost" icon={LogOut} title="Sign out of all devices" onClick={() => patch(s, { revokeSessions: true }, `${s.email} signed out everywhere`)} />}
@@ -118,7 +136,8 @@ export function StaffPage() {
         ))}
       </div>
 
-      {inviting && data && <InviteModal roles={data.assignableRoles} onClose={() => setInviting(false)} onDone={() => { setInviting(false); reload(); }} />}
+      {inviting && data && <InviteModal roles={data.assignableRoles} onClose={() => setInviting(false)} onDone={(l) => { setInviting(false); setLink(l); reload(); }} />}
+      {link && <AccessLinkModal {...link} onClose={() => setLink(null)} />}
       {removing && (
         <ConfirmDialog title="Remove staff member?" danger confirmLabel="Remove" onClose={() => setRemoving(null)}
           message={<><b>{removing.email}</b> will lose access immediately. Their past actions stay in the activity log. Prefer “Disable” if they may come back.</>}
@@ -154,7 +173,7 @@ export function StaffPage() {
   );
 }
 
-function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () => void; onDone: () => void }) {
+function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () => void; onDone: (link: { url: string; email: string; reset: boolean }) => void }) {
   const { toast } = useAdmin();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -166,9 +185,9 @@ function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () =>
     setErr(null);
     setBusy(true);
     try {
-      await api("/api/admin/staff", { method: "POST", json: { email, role, name: name || undefined } });
-      toast(`${email} invited — they can now sign in with Google`);
-      onDone();
+      const d = await api<{ url: string }>("/api/admin/staff", { method: "POST", json: { email, role, name: name || undefined } });
+      toast(`${email} invited`);
+      onDone({ url: d.url, email, reset: false });
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
 
@@ -176,7 +195,7 @@ function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () =>
     <Modal title="Invite a staff member" onClose={onClose} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={busy} onClick={submit} disabled={!email}>Send invite</Button></>}>
       {err && <div className="text-[13px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3" role="alert">{err}</div>}
       <div className="space-y-3.5">
-        <Field label="Google account email" hint="They sign in with “Continue with Google” using exactly this address."><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@gmail.com" autoFocus /></Field>
+        <Field label="Email address" hint="Any email works (Gmail, Yahoo, Outlook, company…). You'll get a link to send them."><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@gmail.com" autoFocus /></Field>
         <Field label="Name (optional)"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="Role">
           <div className="space-y-2">
@@ -188,6 +207,35 @@ function InviteModal({ roles, onClose, onDone }: { roles: Role[]; onClose: () =>
             ))}
           </div>
         </Field>
+      </div>
+    </Modal>
+  );
+}
+
+function AccessLinkModal({ url, email, reset, onClose }: { url: string; email: string; reset: boolean; onClose: () => void }) {
+  const { toast } = useAdmin();
+  const text = reset
+    ? `Hello, here is your link to set a new password for the Cheap Laptops Ghana dashboard (valid 72 h, single use): ${url}`
+    : `Hello, you've been invited to the Cheap Laptops Ghana staff dashboard. Open this link to create your password (valid 72 h, single use): ${url}\nIf you have a Google account with ${email}, you can also use "Continue with Google".`;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch { toast("Copy failed — select the link manually", "err"); }
+  };
+  return (
+    <Modal title={reset ? "Password reset link" : "Invitation link"} onClose={onClose} footer={<Button variant="primary" onClick={onClose}>Done</Button>}>
+      <p className="text-[13px] text-slate-600 mb-3">
+        Send this private link to <b>{email}</b>. It works <b>once</b> and expires in <b>72 hours</b>. It won't be shown again — you can always create a new one.
+      </p>
+      <div className="flex gap-2">
+        <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="font-mono !text-[12px]" aria-label="Access link" />
+        <Button icon={Copy} onClick={copy}>Copy</Button>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-3">
+        <a href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-3.5 py-2 rounded-lg bg-[#25D366] text-white hover:opacity-90">
+          <MessageCircle size={15} /> Send on WhatsApp
+        </a>
+        <a href={`mailto:${email}?subject=${encodeURIComponent("Your Cheap Laptops Ghana dashboard access")}&body=${encodeURIComponent(text)}`} className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-3.5 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">
+          <Mail size={15} /> Send by email
+        </a>
       </div>
     </Modal>
   );

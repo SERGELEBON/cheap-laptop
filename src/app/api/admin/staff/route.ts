@@ -5,7 +5,8 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { clientIp, requireStaff } from "@/lib/admin-auth";
+import { appOrigin, clientIp, requireStaff } from "@/lib/admin-auth";
+import { inviteUrl, newInviteToken } from "@/lib/password";
 import { assignableRoles, ROLES, ROLE_INFO } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +18,18 @@ export async function GET(req: NextRequest) {
     orderBy: [{ active: "desc" }, { createdAt: "asc" }],
     select: {
       id: true, email: true, name: true, image: true, role: true, active: true, lastLoginAt: true, createdAt: true, googleSub: true,
+      passwordHash: true, inviteExpiresAt: true,
       invitedBy: { select: { email: true } },
     },
   });
   return NextResponse.json({
-    rows: rows.map(({ googleSub, ...r }) => ({ ...r, hasSignedIn: !!googleSub })),
+    rows: rows.map(({ googleSub, passwordHash, inviteExpiresAt, ...r }) => ({
+      ...r,
+      hasGoogle: !!googleSub,
+      hasPassword: !!passwordHash,
+      hasSignedIn: !!r.lastLoginAt,
+      linkPending: !!inviteExpiresAt && inviteExpiresAt > new Date(),
+    })),
     assignableRoles: assignableRoles(g.staff.role),
     me: g.staff.id,
   });
@@ -44,9 +52,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `You can't grant the ${ROLE_INFO[role].label} role` }, { status: 403 });
   }
   try {
-    const user = await db.staffUser.create({ data: { email, role, name: name || null, invitedById: g.staff.id } });
+    /* the invitee can sign in with Google (same email) or set a password via the one-time link */
+    const link = newInviteToken();
+    const user = await db.staffUser.create({
+      data: { email, role, name: name || null, invitedById: g.staff.id, inviteTokenHash: link.hash, inviteExpiresAt: link.expiresAt },
+    });
     await audit(g.staff, "staff.invite", { entity: "StaffUser", entityId: user.id, summary: `Invited ${email} as ${ROLE_INFO[role].label}`, ip: clientIp(req) });
-    return NextResponse.json({ ok: true, id: user.id }, { status: 201 });
+    return NextResponse.json({ ok: true, id: user.id, url: inviteUrl(appOrigin(req), link.token), expiresAt: link.expiresAt }, { status: 201 });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return NextResponse.json({ error: "This email is already a staff member" }, { status: 409 });

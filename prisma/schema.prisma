@@ -31,6 +31,12 @@ model StaffUser {
   name           String?
   image          String?
   googleSub      String?   @unique // bound on first Google sign-in
+  passwordHash   String? // scrypt "salt:hash" — for staff without a Google account
+  passwordSetAt  DateTime?
+  inviteTokenHash String?  @unique // sha256 of the one-time invite / reset link token
+  inviteExpiresAt DateTime?
+  failedLogins   Int       @default(0)
+  lockedUntil    DateTime?
   role           Role      @default(VIEWER)
   active         Boolean   @default(true)
   sessionVersion Int       @default(1) // bump to revoke every session

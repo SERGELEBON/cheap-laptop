@@ -74,3 +74,17 @@ Products that have been ordered can't be hard-deleted (order history must stay i
 - OAuth 2.0 authorization code flow with **PKCE** + `state`; only Google-verified emails are accepted, and the Google account ID is bound on first sign-in.
 - Session: httpOnly, `Secure`, `SameSite=Lax` HMAC-signed cookie, 8 h, re-validated against the DB on each request.
 - Mutations require a same-origin `Origin` header (CSRF).
+
+## Locations (multiple shops)
+
+*Admin → Locations* lists every shop/warehouse. Accra (main), Kumasi and Tamale are created on first run, and all existing stock is assigned to the main shop.
+
+- **Stock per shop**: each product has a quantity per location. The store shows the total. Use *Inventory → Transfer* to move stock between shops (two ledger entries, total unchanged).
+- **Online orders**: an order goes to the shop whose *regions served* include the customer's region (otherwise the main shop). Stock is taken from that shop, or from the shop with the most stock if it doesn't have enough. *Reassign* moves the reserved stock with the order, and *Cancel* puts it back where it came from.
+- **Branch managers**: when inviting (or with *Change* in Staff & roles), limit a Store manager, Stock keeper, Sales agent or Viewer to one or more shops. They only see and act on those shops' stock, orders and dashboard figures, and this is enforced on the server. Owners and Administrators always see every shop.
+- **Location switcher** (top bar): focuses the dashboard, inventory and orders on one shop.
+- A shop with stock or orders can't be deleted. Transfer its stock and **deactivate** it instead.
+
+## Product images
+
+Upload photos straight from the product form (JPG/PNG/WebP/AVIF/GIF, up to 4 MB, up to 12 per product, the first one is the main photo). Files go to the public Vercel Blob store **cheaplaptop-images**, connected to the project (`BLOB_READ_WRITE_TOKEN` is injected automatically). Pasting an image URL still works.

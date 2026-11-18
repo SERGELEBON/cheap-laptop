@@ -77,7 +77,9 @@ export const useStore = create<State>()(
       navigate: (v) => {
         set({ view: v });
         const h = viewToHash(v);
-        if (typeof window !== "undefined" && window.location.hash !== h) {
+        /* the admin app owns its own sub-routes (#/admin/products, #/admin/invite/…) — don't collapse them */
+        const keepAdminRoute = v.name === "admin" && typeof window !== "undefined" && window.location.hash.startsWith("#/admin");
+        if (typeof window !== "undefined" && !keepAdminRoute && window.location.hash !== h) {
           window.location.hash = h;
         }
         window.scrollTo({ top: 0 });

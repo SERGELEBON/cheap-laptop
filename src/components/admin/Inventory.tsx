@@ -96,7 +96,9 @@ function StockLevels() {
                   </td>
                   {cols.map((l) => {
                     const n = p.byLocation[l.id] ?? 0;
-                    return <td key={l.id} className={cx(td, "text-right font-bold tabular-nums", n <= 0 ? "text-red-600" : n <= p.lowStockThreshold ? "text-amber-600" : "text-slate-800")}>{fmtNum(n)}</td>;
+                    /* in the all-shops view an empty shop is shown quietly when the product is stocked elsewhere */
+                    const quiet = multi && n <= 0 && p.quantity > 0;
+                    return <td key={l.id} className={cx(td, "text-right font-bold tabular-nums", quiet ? "text-slate-300" : n <= 0 ? "text-red-600" : n <= p.lowStockThreshold ? "text-amber-600" : "text-slate-800")}>{fmtNum(n)}</td>;
                   })}
                   {multi && <td className={cx(td, "text-right font-extrabold text-[14px] tabular-nums")}>{fmtNum(p.quantity)}</td>}
                   <td className={cx(td, "text-right text-slate-500")}>{p.lowStockThreshold}</td>

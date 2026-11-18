@@ -50,10 +50,9 @@ export async function GET(req: NextRequest) {
       const byLoc = Object.fromEntries(locIds.map((id) => [id, 0])) as Record<number, number>;
       for (const s of p.stocks) byLoc[s.locationId] = s.quantity;
       const qty = focus.reduce((a, id) => a + (byLoc[id] ?? 0), 0);
-      /* low/out is evaluated per shop: a product is "low" if any focused shop is low */
-      const perShop = focus.map((id) => byLoc[id] ?? 0);
-      const out = perShop.length > 0 && perShop.every((n) => n <= 0);
-      const low = !out && perShop.some((n) => n <= p.lowStockThreshold);
+      /* status on the quantity in focus: one shop, or the total of the visible shops */
+      const out = qty <= 0;
+      const low = !out && qty <= p.lowStockThreshold;
       const { stocks, ...rest } = p;
       void stocks;
       return { ...rest, byLocation: byLoc, quantity: qty, state: out ? "out" : low ? "low" : "in" };

@@ -2,17 +2,14 @@
 
 The staff dashboard lives at **`/#/admin`**. Staff sign in with **Google**; access is **invite-only** and every action is written to the **activity log**.
 
-## 1. Database (Supabase PostgreSQL)
+## 1. Database (Neon PostgreSQL via Vercel)
 
-SQLite can't persist on Vercel, so the shop now uses PostgreSQL.
+SQLite can't persist on Vercel, so the shop uses PostgreSQL. The database **`cheaplaptop-db`** (Neon, free plan, region `iad1`) is connected to the Vercel project from **Storage**, which injects `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (direct) into Production and Preview.
 
-1. Create a Supabase project (region close to Ghana, e.g. `eu-west`).
-2. **Project Settings → Database → Connection string → Session pooler** (port **5432**). Copy it and put your DB password in it.
-3. In **Vercel → Settings → Environment Variables** add `DATABASE_URL` with that value (Production + Preview).
-
-On the next deploy, `scripts/vercel-build.mjs` runs `prisma db push` to create the tables. On the first catalogue load, the 66 products from `public/data/products.json` are imported.
+On each deploy, `scripts/vercel-build.mjs` runs `prisma db push` to create or update the tables. On the first catalogue load, the 66 products from `public/data/products.json` are imported.
 
 > `db push` runs without `--accept-data-loss`: a schema change that would delete data fails the build instead of dropping it.
+> For local dev, copy both variables from Vercel → Storage → cheaplaptop-db → `.env.local` into your `.env`.
 
 ## 2. Google sign-in
 

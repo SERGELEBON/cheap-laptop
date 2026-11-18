@@ -9,6 +9,8 @@ const globalForPrisma = globalThis as unknown as {
    caller's try/catch instead of crashing the whole route at import time. */
 function getClient(): PrismaClient {
   if (!globalForPrisma.prisma) {
+    /* directUrl is only needed by the Prisma CLI; default it so the client never fails on a missing var */
+    process.env.DATABASE_URL_UNPOOLED ??= process.env.DATABASE_URL
     globalForPrisma.prisma = new PrismaClient({
       log: process.env.NODE_ENV === 'production' ? ['error'] : ['query'],
     })

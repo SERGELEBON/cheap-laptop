@@ -6,6 +6,9 @@ import { execSync } from "node:child_process";
 
 const run = (cmd) => execSync(cmd, { stdio: "inherit" });
 
+/* Neon via Vercel provides DATABASE_URL (pooled) + DATABASE_URL_UNPOOLED (direct). */
+process.env.DATABASE_URL_UNPOOLED ||= process.env.DATABASE_URL || "";
+
 run("npx prisma generate");
 
 const url = process.env.DATABASE_URL || "";

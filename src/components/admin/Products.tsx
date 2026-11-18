@@ -288,21 +288,21 @@ function ProductForm({ product, template, onClose, onSaved }: { product: PRow | 
             <div className="grid sm:grid-cols-3 gap-3.5">
               <Field label="SKU" hint={isNew ? "Leave empty to generate" : undefined}><Input value={f.sku} onChange={(e) => set("sku", e.target.value.toUpperCase())} placeholder="HP-840-G8" /></Field>
               {isNew ? (
-                <Field label="Opening stock" hint={me.locations.length > 1 ? undefined : me.locations[0] ? `At ${me.locations[0].name}` : undefined}>
-                  <div className="flex gap-2">
-                    <Input type="number" min={0} value={f.stock} onChange={(e) => set("stock", e.target.value)} className="!w-24" />
-                    {me.locations.length > 1 && (
-                      <Select value={stockLocation} onChange={(e) => setStockLocation(Number(e.target.value))} aria-label="Location of the opening stock">
-                        {me.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                      </Select>
-                    )}
-                  </div>
+                <Field label="Opening stock" hint={me.locations.length === 1 ? `At ${me.locations[0].name}` : undefined}>
+                  <Input type="number" min={0} value={f.stock} onChange={(e) => set("stock", e.target.value)} />
                 </Field>
               ) : (
                 <Field label="Current stock" hint="Change it with “Adjust stock”"><Input value={String(product!.stock)} disabled /></Field>
               )}
               <Field label="Low-stock alert at"><Input type="number" min={0} value={f.lowStockThreshold} onChange={(e) => set("lowStockThreshold", e.target.value)} /></Field>
             </div>
+            {isNew && me.locations.length > 1 && (
+              <Field label="Opening stock is at" className="mt-3.5" hint="You can split it between shops later with Inventory → Transfer.">
+                <Select value={stockLocation} onChange={(e) => setStockLocation(Number(e.target.value))}>
+                  {me.locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.isMain ? " (main)" : ""}</option>)}
+                </Select>
+              </Field>
+            )}
           </div>
           <div>
             <div className={section}>Categories</div>

@@ -18,6 +18,9 @@ interface Order {
   lines: { name: string; qty: number; priceFmt: string }[];
   payment: string;
   name: string;
+  /** wa.me link with the order details, opened right after checkout */
+  whatsappUrl?: string;
+  shop?: string | null;
 }
 
 interface State {

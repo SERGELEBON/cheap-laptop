@@ -32,6 +32,16 @@ function ghs(pesewas: number): string {
   return "GH\u20B5 " + (pesewas / 100).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const DEFAULT_WHATSAPP = "233240999979";
+
+/** "0240 999979" / "+233 24 099 9979" → "233240999979"; null if not a Ghana mobile number. */
+function toWhatsAppNumber(phone: string | null | undefined): string | null {
+  const d = (phone ?? "").replace(/\D/g, "");
+  if (/^0\d{9}$/.test(d)) return `233${d.slice(1)}`;
+  if (/^233\d{9}$/.test(d)) return d;
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {
     return NextResponse.json({ error: "Cross-origin orders are not allowed" }, { status: 403 });
@@ -107,12 +117,16 @@ export async function POST(req: NextRequest) {
       return created;
     });
 
+    /* WhatsApp of the shop fulfilling the order (falls back to the main line) */
+    const shop = order.locationId ? await db.location.findUnique({ where: { id: order.locationId }, select: { name: true, phone: true } }) : null;
     return NextResponse.json({
       ref: order.ref,
       subtotal,
       shipping,
       total,
       items: lines.map((l) => ({ name: l.name, qty: l.qty, priceFmt: ghs(l.price * l.qty) })),
+      shop: shop?.name ?? null,
+      whatsapp: toWhatsAppNumber(shop?.phone) ?? DEFAULT_WHATSAPP,
     });
   } catch (e) {
     if (e instanceof StockError && e.code === "INSUFFICIENT") {

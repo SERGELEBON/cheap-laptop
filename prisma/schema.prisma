@@ -1,0 +1,71 @@
+// Cheap Laptops Ghana — Prisma schema
+// Money is stored as integer pesewas (1 GH₵ = 100) to avoid float errors.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String // scrypt: salt:hash (hex)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Product {
+  id               Int      @id @default(autoincrement())
+  slug             String   @unique
+  name             String
+  sku              String   @unique
+  price            Int // pesewas
+  regularPrice     Int? // pesewas
+  onSale           Boolean  @default(false)
+  discount         Int      @default(0)
+  image            String?
+  categorySlugs    String   @default("") // comma-separated category slugs
+  brandSlug        String?
+  shortDescription String   @default("")
+  description      String   @default("")
+  averageRating    Float    @default(0)
+  reviewCount      Int      @default(0)
+  stock            Int      @default(10)
+  featured         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Order {
+  id           Int         @id @default(autoincrement())
+  ref          String      @unique
+  customerName String
+  phone        String
+  email        String?
+  address      String
+  city         String
+  region       String
+  notes        String?
+  payment      String
+  subtotal     Int // pesewas
+  shipping     Int // pesewas
+  total        Int // pesewas
+  status       String      @default("pending") // pending | processing | shipped | delivered | cancelled
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  items        OrderItem[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int?
+  name      String
+  price     Int // pesewas (unit price captured at purchase time)
+  qty       Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}

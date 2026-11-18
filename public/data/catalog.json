@@ -1,0 +1,476 @@
+{
+ "generatedAt": "2026-11-12T04:41:29.213Z",
+ "categories": [
+  {
+   "id": 1,
+   "name": "Laptops",
+   "slug": "laptops",
+   "parent": 0,
+   "count": 42,
+   "banner": null,
+   "yoastTitle": "Laptops in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy laptops at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 2,
+   "name": "Gaming Laptops",
+   "slug": "laptops/gaming-laptops",
+   "parent": 1,
+   "count": 10,
+   "banner": null,
+   "yoastTitle": "Gaming Laptops in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy gaming laptops at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 3,
+   "name": "Business Laptops",
+   "slug": "laptops/business-laptops",
+   "parent": 1,
+   "count": 10,
+   "banner": null,
+   "yoastTitle": "Business Laptops in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy business laptops at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 4,
+   "name": "Student Laptops",
+   "slug": "laptops/student-laptops",
+   "parent": 1,
+   "count": 8,
+   "banner": null,
+   "yoastTitle": "Student Laptops in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy student laptops at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 5,
+   "name": "Ultrabooks",
+   "slug": "laptops/ultrabooks",
+   "parent": 1,
+   "count": 6,
+   "banner": null,
+   "yoastTitle": "Ultrabooks in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy ultrabooks at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 6,
+   "name": "2-in-1 & Detachable",
+   "slug": "laptops/2-in-1-detachable",
+   "parent": 1,
+   "count": 6,
+   "banner": null,
+   "yoastTitle": "2-in-1 & Detachable in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy 2-in-1 & detachable at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 7,
+   "name": "Chromebooks",
+   "slug": "laptops/chromebooks",
+   "parent": 1,
+   "count": 2,
+   "banner": null,
+   "yoastTitle": "Chromebooks in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy chromebooks at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 8,
+   "name": "MacBooks",
+   "slug": "macbooks",
+   "parent": 0,
+   "count": 6,
+   "banner": null,
+   "yoastTitle": "MacBooks in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy macbooks at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 9,
+   "name": "MacBook Air",
+   "slug": "macbooks/macbook-air",
+   "parent": 8,
+   "count": 4,
+   "banner": null,
+   "yoastTitle": "MacBook Air in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy macbook air at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 10,
+   "name": "MacBook Pro",
+   "slug": "macbooks/macbook-pro",
+   "parent": 8,
+   "count": 2,
+   "banner": null,
+   "yoastTitle": "MacBook Pro in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy macbook pro at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 11,
+   "name": "Computers",
+   "slug": "computers",
+   "parent": 0,
+   "count": 7,
+   "banner": null,
+   "yoastTitle": "Computers in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy computers at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 12,
+   "name": "Desktops",
+   "slug": "computers/desktops",
+   "parent": 11,
+   "count": 3,
+   "banner": null,
+   "yoastTitle": "Desktops in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy desktops at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 13,
+   "name": "Monitors",
+   "slug": "computers/monitors",
+   "parent": 11,
+   "count": 4,
+   "banner": null,
+   "yoastTitle": "Monitors in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy monitors at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 14,
+   "name": "Accessories",
+   "slug": "accessories",
+   "parent": 0,
+   "count": 8,
+   "banner": null,
+   "yoastTitle": "Accessories in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy accessories at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 15,
+   "name": "Laptop Bags",
+   "slug": "accessories/bags",
+   "parent": 14,
+   "count": 2,
+   "banner": null,
+   "yoastTitle": "Laptop Bags in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy laptop bags at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 16,
+   "name": "Mice",
+   "slug": "accessories/mice",
+   "parent": 14,
+   "count": 3,
+   "banner": null,
+   "yoastTitle": "Mice in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy mice at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 17,
+   "name": "Headsets",
+   "slug": "accessories/headsets",
+   "parent": 14,
+   "count": 3,
+   "banner": null,
+   "yoastTitle": "Headsets in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy headsets at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 18,
+   "name": "Electric Bikes & Scooters",
+   "slug": "scooters",
+   "parent": 0,
+   "count": 3,
+   "banner": null,
+   "yoastTitle": "Electric Bikes & Scooters in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy electric bikes & scooters at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  },
+  {
+   "id": 19,
+   "name": "Electric Scooters",
+   "slug": "scooters/electric-scooters",
+   "parent": 18,
+   "count": 3,
+   "banner": null,
+   "yoastTitle": "Electric Scooters in Ghana | Cheap Laptops",
+   "yoastDesc": "Buy electric scooters at the best prices in Ghana. Free bag & mouse with boxed laptops. Stores in Accra, Kumasi & Tamale."
+  }
+ ],
+ "brands": [
+  {
+   "id": 1,
+   "name": "HP",
+   "slug": "hp",
+   "count": 15,
+   "logo": "/images/brand/hp.svg"
+  },
+  {
+   "id": 2,
+   "name": "Dell",
+   "slug": "dell",
+   "count": 8,
+   "logo": "/images/brand/dell.svg"
+  },
+  {
+   "id": 3,
+   "name": "Lenovo",
+   "slug": "lenovo",
+   "count": 9,
+   "logo": "/images/brand/lenovo.svg"
+  },
+  {
+   "id": 4,
+   "name": "Apple",
+   "slug": "apple",
+   "count": 6,
+   "logo": "/images/brand/apple.svg"
+  },
+  {
+   "id": 5,
+   "name": "Microsoft",
+   "slug": "microsoft",
+   "count": 2,
+   "logo": "/images/brand/microsoft.svg"
+  },
+  {
+   "id": 6,
+   "name": "ASUS",
+   "slug": "asus",
+   "count": 6,
+   "logo": "/images/brand/asus.svg"
+  },
+  {
+   "id": 7,
+   "name": "Acer",
+   "slug": "acer",
+   "count": 7,
+   "logo": "/images/brand/acer.svg"
+  },
+  {
+   "id": 8,
+   "name": "MSI",
+   "slug": "msi",
+   "count": 1,
+   "logo": "/images/brand/msi.svg"
+  },
+  {
+   "id": 9,
+   "name": "LG",
+   "slug": "lg",
+   "count": 2,
+   "logo": "/images/brand/lg.svg"
+  },
+  {
+   "id": 10,
+   "name": "Samsung",
+   "slug": "samsung",
+   "count": 1,
+   "logo": "/images/brand/samsung.svg"
+  },
+  {
+   "id": 11,
+   "name": "Oraimo",
+   "slug": "oraimo",
+   "count": 2,
+   "logo": "/images/brand/oraimo.svg"
+  },
+  {
+   "id": 12,
+   "name": "Logitech",
+   "slug": "logitech",
+   "count": 2,
+   "logo": "/images/brand/logitech.svg"
+  }
+ ],
+ "homeSections": [
+  {
+   "title": "Best Sellers",
+   "slug": "best-sellers",
+   "products": [
+    "hp-victus-15-core-i5-12450h-8gb-512gb-ssd-rtx-2050",
+    "lenovo-loq-15-core-i5-12450h-rtx-3050-6gb-16gb-512gb-ssd",
+    "hp-omen-16-core-i7-13700hx-rtx-4060-8gb-16gb-1tb-ssd",
+    "hp-probook-450-g10-core-i5-1335u-16gb-512gb-ssd-15-6",
+    "lenovo-thinkpad-e16-gen-1-ryzen-5-7530u-16gb-512gb-ssd",
+    "hp-15s-fq5-core-i3-1215u-8gb-256gb-ssd-15-6",
+    "lenovo-ideapad-1-15-ryzen-3-7320u-8gb-256gb-ssd",
+    "asus-zenbook-14-oled-core-i5-13500h-16gb-512gb-ssd"
+   ]
+  },
+  {
+   "title": "Gaming Laptops",
+   "slug": "gaming-laptops",
+   "products": [
+    "hp-victus-15-core-i5-12450h-8gb-512gb-ssd-rtx-2050",
+    "lenovo-loq-15-core-i5-12450h-rtx-3050-6gb-16gb-512gb-ssd",
+    "acer-nitro-v-15-core-i5-13420h-rtx-4050-16gb-512gb-ssd",
+    "asus-tuf-gaming-f15-core-i7-12700h-rtx-3050-ti-16gb",
+    "msi-katana-15-core-i7-13620h-rtx-4060-16gb-512gb-ssd",
+    "dell-g15-5530-core-i7-13650hx-rtx-4060-16gb-1tb-ssd",
+    "hp-omen-16-core-i7-13700hx-rtx-4060-8gb-16gb-1tb-ssd",
+    "lenovo-legion-slim-5-16-ryzen-7-7840hs-rtx-4060-16gb"
+   ]
+  },
+  {
+   "title": "Business Laptops",
+   "slug": "business-laptops",
+   "products": [
+    "hp-probook-450-g10-core-i5-1335u-16gb-512gb-ssd-15-6",
+    "hp-elitebook-840-g8-core-i5-1145g7-vpro-16gb-512gb-ssd",
+    "dell-latitude-3540-core-i5-1335u-8gb-256gb-ssd-15-6",
+    "dell-latitude-5440-core-i5-1345u-16gb-512gb-ssd-14",
+    "lenovo-thinkpad-e16-gen-1-ryzen-5-7530u-16gb-512gb-ssd",
+    "lenovo-thinkpad-t14-gen-3-core-i5-1235u-16gb-512gb-ssd",
+    "dell-vostro-3520-core-i5-1235u-8gb-512gb-ssd-15-6",
+    "hp-250-g10-core-i5-1335u-8gb-512gb-ssd-15-6"
+   ]
+  },
+  {
+   "title": "Student Laptops",
+   "slug": "student-laptops",
+   "products": [
+    "hp-15s-fq5-core-i3-1215u-8gb-256gb-ssd-15-6",
+    "lenovo-ideapad-slim-3-15-ryzen-5-7520u-8gb-256gb-ssd",
+    "acer-aspire-5-a515-core-i5-1235u-8gb-512gb-ssd",
+    "asus-vivobook-15-x1504-core-i5-1235u-8gb-512gb-ssd",
+    "dell-inspiron-15-3520-core-i3-1215u-8gb-256gb-ssd",
+    "hp-14s-dq5-core-i3-n305-8gb-256gb-ssd-14",
+    "lenovo-ideapad-1-15-ryzen-3-7320u-8gb-256gb-ssd",
+    "acer-aspire-3-a315-ryzen-3-7320u-8gb-256gb-ssd"
+   ]
+  },
+  {
+   "title": "MacBooks",
+   "slug": "macbooks",
+   "products": [
+    "apple-macbook-air-13-m1-8gb-256gb-space-grey",
+    "apple-macbook-air-13-m2-8gb-256gb-midnight",
+    "apple-macbook-air-15-m2-8gb-256gb-starlight",
+    "apple-macbook-air-13-m3-8gb-256gb-silver",
+    "apple-macbook-pro-14-m3-8gb-512gb-space-black",
+    "apple-macbook-pro-16-m3-pro-18gb-512gb-space-black"
+   ]
+  },
+  {
+   "title": "2-in-1 & Detachable",
+   "slug": "2-in-1-detachable",
+   "products": [
+    "microsoft-surface-pro-9-core-i5-8gb-256gb-type-cover",
+    "microsoft-surface-laptop-go-3-core-i5-8gb-256gb",
+    "lenovo-ideapad-flex-5-14-ryzen-5-7530u-16gb-512gb",
+    "hp-pavilion-x360-14-core-i5-1335u-8gb-512gb-ssd",
+    "acer-spin-5-sp513-core-i5-1335u-16gb-512gb-ssd",
+    "asus-vivobook-flip-14-core-i3-1215u-8gb-256gb"
+   ]
+  },
+  {
+   "title": "Accessories",
+   "slug": "accessories",
+   "products": [
+    "cheap-laptops-padded-laptop-backpack-fits-15-6",
+    "oxford-laptop-backpack-15-6-usb-charging-port",
+    "oraimo-smartoffice-wireless-mouse-silent-clicks",
+    "logitech-m170-wireless-mouse",
+    "hp-220-wireless-mouse-and-keyboard-combo",
+    "oraimo-boompop-2-wireless-headset",
+    "hp-stereo-3-5mm-headset-with-microphone",
+    "logitech-h111-stereo-headset"
+   ]
+  },
+  {
+   "title": "Electric Bikes & Scooters",
+   "slug": "electric-bikes-scooters",
+   "products": [
+    "city-rider-electric-scooter-350w-led-lights-gh-7k-fixed",
+    "cruiser-electric-bike-scooter-500w-45km-range-gh-10k-fixed",
+    "luxury-max-electric-scooter-800w-dual-battery-gh-12k-fixed"
+   ]
+  },
+  {
+   "title": "New Arrivals",
+   "slug": "new-arrivals",
+   "products": [
+    "hp-p22h-g5-21-5-full-hd-ips-monitor",
+    "dell-se2422h-24-full-hd-75hz-monitor",
+    "lg-24mp400-24-full-hd-ips-monitor",
+    "samsung-t35f-27-fhd-curved-monitor",
+    "hp-desktop-pro-a-3000-g3-mt-athlon-8gb-256gb-21-5",
+    "dell-optiplex-3000s-sff-core-i5-12500-8gb-256gb-ssd",
+    "lenovo-thinkcentre-neo-50t-core-i5-12400-16gb-512gb"
+   ]
+  }
+ ],
+ "pages": [
+  {
+   "slug": "about-us",
+   "title": "About Us",
+   "content": "\n      <h2>Cheap Laptops — Home of Affordable Laptops &amp; Computers</h2>\n      <p><b>NOW OPEN!</b> Cheap Laptops is Ghana's home of affordable laptops and computers, serving students, professionals, families, buyers and intermediaries (dealers) across the country.</p>\n      <p>We stock genuine boxed laptops from trusted brands — HP, Dell, Lenovo, Apple MacBook, Microsoft Surface, ASUS, Acer and MSI — plus desktops, monitors, accessories and a growing range of luxury electric bikes and scooters at our Accra store.</p>\n      <h3>Our Stores</h3>\n      <ul>\n        <li><b>Accra:</b> Haatso, Ecobank area</li>\n        <li><b>Kumasi:</b> Asafo, Labour area</li>\n        <li><b>Tamale:</b> Market area</li>\n      </ul>\n      <h3>Current Promo</h3>\n      <p>Buy any boxed laptop and receive a <b>FREE bag and mouse</b> — while stock lasts.</p>\n      <h3>For Buyers &amp; Dealers</h3>\n      <p>We share laptop information for all buyers and middlemen. Call <b>0240999979</b> or <b>02086999988</b> for retail and wholesale deals, or reach us on our Telegram channel <b>CHEAP LAPTOPS COMPANY</b>.</p>\n    "
+  },
+  {
+   "slug": "contact-us",
+   "title": "Contact Us",
+   "content": "\n      <h2>Talk to Cheap Laptops</h2>\n      <p>Call or WhatsApp us — we reply fast:</p>\n      <ul>\n        <li><b>Phone:</b> 0240 999979 / 0208 699 988</li>\n        <li><b>Telegram:</b> CHEAP LAPTOPS COMPANY (2,200+ members)</li>\n      </ul>\n      <h3>Visit a Store</h3>\n      <ul>\n        <li><b>Accra:</b> Haatso, Ecobank area</li>\n        <li><b>Kumasi:</b> Asafo, Labour area</li>\n        <li><b>Tamale:</b> Market area</li>\n      </ul>\n      <p>Kindly tell everyone about us!</p>\n    "
+  },
+  {
+   "slug": "customer-help",
+   "title": "FAQs",
+   "content": "\n      <h2>Frequently Asked Questions</h2>\n      <h3>Are the laptops new and boxed?</h3>\n      <p>Yes — every laptop we sell is genuine and factory-boxed. Each boxed laptop comes with a FREE bag and mouse while the promo lasts.</p>\n      <h3>Do you serve dealers and intermediaries?</h3>\n      <p>Yes. We provide laptop information for all buyers and middlemen, with attractive wholesale prices. Call 0240999979 or 02086999988.</p>\n      <h3>Where are your stores?</h3>\n      <p>Accra — Haatso (Ecobank area), Kumasi — Asafo (Labour area), Tamale — Market area.</p>\n      <h3>How much are the electric scooters?</h3>\n      <p>Luxury electric bikes &amp; scooters are available at our Accra store: GH₵ 7,000 / 10,000 / 12,000. Prices are fixed and non-negotiable.</p>\n      <h3>How do I pay?</h3>\n      <p>Cash on delivery in Accra, Mobile Money, bank transfer or card. See Payment Options for details.</p>\n      <h3>Do you deliver outside Accra?</h3>\n      <p>Yes — we deliver nationwide to Kumasi, Tamale and everywhere in Ghana.</p>\n      <h3>What warranty do I get?</h3>\n      <p>Boxed laptops carry their standard brand warranty. Our team also provides after-sale support — call us any time.</p>\n    "
+  },
+  {
+   "slug": "locations",
+   "title": "Our Stores",
+   "content": "\n      <h2>Visit Cheap Laptops</h2>\n      <table>\n        <tr><th>City</th><th>Location</th><th>Highlights</th></tr>\n        <tr><td><b>Accra</b></td><td>Haatso, Ecobank area</td><td>Flagship store — laptops, accessories &amp; luxury electric bikes and scooters</td></tr>\n        <tr><td><b>Kumasi</b></td><td>Asafo, Labour area</td><td>Affordable laptops &amp; student computers</td></tr>\n        <tr><td><b>Tamale</b></td><td>Market area</td><td>Affordable laptops, accessories &amp; support</td></tr>\n      </table>\n      <p>Call before visiting for stock checks: <b>0240 999979</b> / <b>0208 699 988</b>.</p>\n    "
+  },
+  {
+   "slug": "delivery-information",
+   "title": "Delivery Information",
+   "content": "\n      <h2>Nationwide Delivery</h2>\n      <p>We deliver across Ghana. Same-day delivery within Accra for orders confirmed before 12 noon (terms apply).</p>\n      <ul>\n        <li><b>Accra:</b> same-day or next-day doorstep delivery</li>\n        <li><b>Kumasi &amp; regional capitals:</b> 1–2 business days</li>\n        <li><b>Other towns:</b> 2–4 business days via trusted couriers</li>\n      </ul>\n      <p>Delivery fee is shown at checkout — orders from GH₵ 1,000 qualify for free delivery.</p>\n    "
+  },
+  {
+   "slug": "return-policy",
+   "title": "Return Policy",
+   "content": "\n      <h2>Easy 7-Day Returns</h2>\n      <p>If a product is faulty on arrival or not as described, contact us within 7 days:</p>\n      <ul>\n        <li>Products must be unused, in original packaging with all accessories.</li>\n        <li>Boxed laptops must retain their factory seal for change-of-mind returns.</li>\n        <li>Faulty units are replaced or repaired under the brand warranty.</li>\n        <li>Electric scooters are inspected with you at the store before handover.</li>\n      </ul>\n      <p>Start a return by calling 0240 999979 or visiting the store where you bought the item.</p>\n    "
+  },
+  {
+   "slug": "payment-options",
+   "title": "Payment Options",
+   "content": "\n      <h2>Ways to Pay</h2>\n      <ul>\n        <li><b>Cash on Delivery</b> — available in Accra</li>\n        <li><b>Mobile Money</b> — MTN MoMo, Telecel Cash, AirtelTigo Money (pay to the store line we confirm on call)</li>\n        <li><b>Bank transfer</b> — details shared by our team when you order</li>\n        <li><b>Card</b> — pay by card in our stores</li>\n      </ul>\n      <p>Electric scooter prices (GH₵ 7k / 10k / 12k) are fixed and non-negotiable.</p>\n    "
+  },
+  {
+   "slug": "how-it-works",
+   "title": "How It Works",
+   "content": "\n      <h2>How to Order</h2>\n      <ol>\n        <li>Browse laptops, computers, accessories or scooters and add to cart.</li>\n        <li>Checkout with your delivery details — or simply call 0240 999979.</li>\n        <li>We confirm stock, price and delivery time with you by phone/WhatsApp.</li>\n        <li>Pay by cash on delivery, Mobile Money, bank transfer or card.</li>\n        <li>Receive your order — boxed laptops include a FREE bag and mouse!</li>\n      </ol>\n    "
+  },
+  {
+   "slug": "wholesale-dealers",
+   "title": "Wholesale & Dealers",
+   "content": "\n      <h2>For Buyers &amp; Intermediaries</h2>\n      <p>Cheap Laptops supplies individuals, resellers, schools, NGOs and companies. Middlemen are welcome — our dealer prices move fast.</p>\n      <ul>\n        <li>Bulk laptop pricing for resellers and institutions</li>\n        <li>Weekly stock lists shared on our Telegram channel: CHEAP LAPTOPS COMPANY</li>\n        <li>Dedicated dealer line: <b>0240999979</b></li>\n      </ul>\n      <p>Kindly tell everyone about it!</p>\n    "
+  },
+  {
+   "slug": "after-sales-service",
+   "title": "After Sales Service",
+   "content": "\n      <h2>After Sales Support</h2>\n      <p>Our support does not end at delivery:</p>\n      <ul>\n        <li>Warranty claims handled with the brand (boxed laptops carry standard brand warranty)</li>\n        <li>Software setup, Windows installation and upgrades available at our stores</li>\n        <li>Call <b>0240 999979</b> / <b>0208 699 988</b> for any support</li>\n      </ul>\n    "
+  },
+  {
+   "slug": "terms-conditions",
+   "title": "Terms & Conditions",
+   "content": "\n      <h2>Terms &amp; Conditions</h2>\n      <p>By using this website or ordering from Cheap Laptops you agree to:</p>\n      <ul>\n        <li>Prices are in Ghana cedis (GH₵) and may change without notice; scooter prices are fixed and non-negotiable.</li>\n        <li>Orders are confirmed by phone before dispatch; stock availability is subject to change.</li>\n        <li>Promo items (free bag &amp; mouse) apply to boxed laptops only, while stock lasts.</li>\n        <li>Deliveries outside Accra are handled by third-party couriers.</li>\n        <li>Personal data is used only to process and deliver your order.</li>\n      </ul>\n    "
+  },
+  {
+   "slug": "privacy-policy",
+   "title": "Privacy Policy",
+   "content": "\n      <h2>Privacy Policy</h2>\n      <p>We respect your privacy. We collect only the details needed to process your order (name, phone, delivery address, optional email).</p>\n      <ul>\n        <li>Your data is never sold or shared with third parties except our delivery partners for fulfilment.</li>\n        <li>Payment details are handled through trusted channels; we do not store card numbers.</li>\n        <li>You can request deletion of your data any time by calling 0240 999979.</li>\n      </ul>\n    "
+  },
+  {
+   "slug": "product-categories",
+   "title": "Product Categories",
+   "content": "\n      <h2>Browse All Categories</h2>\n      <ul>\n        <li>Laptops — gaming, business, student, ultrabooks, 2-in-1 &amp; detachable, Chromebooks</li>\n        <li>MacBooks — MacBook Air &amp; MacBook Pro</li>\n        <li>Computers — desktops &amp; monitors</li>\n        <li>Accessories — bags, mice, headsets</li>\n        <li>Electric Bikes &amp; Scooters — available at our Accra store</li>\n      </ul>\n    "
+  },
+  {
+   "slug": "brands",
+   "title": "Our Brands",
+   "content": "\n      <h2>Brands We Stock</h2>\n      <p>HP, Dell, Lenovo, Apple, Microsoft, ASUS, Acer, MSI, LG, Samsung, Oraimo, Logitech — genuine boxed products only.</p>\n    "
+  },
+  {
+   "slug": "feedback",
+   "title": "Feedback",
+   "content": "\n      <h2>We Love Feedback</h2>\n      <p>Tell us how we did — or what you want us to stock next. Call 0240 999979, message us on WhatsApp, or use the contact form. Kindly tell everyone about it!</p>\n    "
+  }
+ ]
+}

@@ -1,12 +1,13 @@
 /* Server-side catalog builder: seeds products from the static seed file on first
    run, then serves products from the DB (admin-editable) merged with the static
    category/brand/page data. Server-side only. */
-import fs from "fs";
-import path from "path";
 import { db } from "@/lib/db";
+import { backfillProductStock } from "@/lib/locations";
 import type { Cat, Brand, Page, Product, Catalog } from "@/lib/types";
-
-const PUB_DATA = path.join(process.cwd(), "public", "data");
+/* Imported (not read with fs) so the data is bundled into the serverless
+   function on Vercel, where public/ is not available on disk at runtime. */
+import seedProductsJson from "../../public/data/products.json";
+import staticCatalogJson from "../../public/data/catalog.json";
 
 interface SeedProduct {
   slug: string;
@@ -33,8 +34,8 @@ export async function ensureSeeded(): Promise<void> {
   if (seeded) return;
   const count = await db.product.count();
   if (count === 0) {
-    const seed: SeedProduct[] = JSON.parse(fs.readFileSync(path.join(PUB_DATA, "products.json"), "utf8"));
-    /* chunked insert to stay within SQLite parameter limits */
+    const seed = seedProductsJson as unknown as SeedProduct[];
+    /* chunked insert */
     for (let i = 0; i < seed.length; i += 10) {
       const chunk = seed.slice(i, i + 10);
       await db.product.createMany({
@@ -58,6 +59,7 @@ export async function ensureSeeded(): Promise<void> {
         })),
       });
     }
+    await backfillProductStock();
   }
   seeded = true;
 }
@@ -66,17 +68,35 @@ function ghs(pesewas: number): string {
   return "GH\u20B5 " + (pesewas / 100).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export async function buildCatalog(): Promise<Catalog> {
-  await ensureSeeded();
+type Row = Omit<SeedProduct, "categorySlugs" | "image"> & { id: number; categorySlugs: string; image: string | null; gallery?: string };
 
-  const staticBase = JSON.parse(fs.readFileSync(path.join(PUB_DATA, "catalog.json"), "utf8")) as {
+/* Products from the DB; if the DB is unreachable (e.g. no DATABASE_URL, or the
+   read-only filesystem on Vercel with SQLite) fall back to the static seed so
+   the storefront still renders instead of failing with a 500. */
+async function loadRows(): Promise<Row[]> {
+  try {
+    await ensureSeeded();
+    return await db.product.findMany({ where: { status: "ACTIVE" }, orderBy: { id: "asc" } });
+  } catch (e) {
+    console.error("catalog: DB unavailable, serving static seed", e);
+    return (seedProductsJson as unknown as SeedProduct[]).map((p, i) => ({
+      ...p,
+      id: i + 1,
+      categorySlugs: p.categorySlugs.join(","),
+    }));
+  }
+}
+
+export async function buildCatalog(): Promise<Catalog> {
+  /* deep copy so per-request count updates don't mutate the imported module */
+  const staticBase = JSON.parse(JSON.stringify(staticCatalogJson)) as {
     categories: Omit<Cat, never>[];
     brands: Brand[];
     pages: Omit<Page, "id">[];
     homeSections: { title: string; slug: string; products: string[] }[];
   };
 
-  const rows = await db.product.findMany({ orderBy: { id: "asc" } });
+  const rows = await loadRows();
   const catList: Cat[] = staticBase.categories;
   const brandList: Brand[] = staticBase.brands;
   const catBySlug = new Map(catList.map((c) => [c.slug, c]));
@@ -103,7 +123,7 @@ export async function buildCatalog(): Promise<Catalog> {
       onSale: r.onSale,
       discount: r.discount,
       image: r.image,
-      gallery: r.image ? [r.image] : [],
+      gallery: [r.image, ...("gallery" in r && typeof r.gallery === "string" ? r.gallery.split("\n") : [])].filter((x): x is string => !!x),
       categories: cats,
       brand,
       shortDescription: r.shortDescription,

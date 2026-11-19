@@ -17,11 +17,16 @@ export default function Page() {
   const view = useStore((s) => s.view);
   useHashRouter();
   const [catalog, setCatalog] = useState<Catalog | null>(cache);
+  const [loadError, setLoadError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (cache) return;
     fetch("/api/catalog")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`catalog HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data: Catalog) => {
         // build lookup maps
         data.categoriesBySlug = Object.fromEntries(data.categories.map((c) => [c.slug, c]));
@@ -31,8 +36,14 @@ export default function Page() {
         cache = data;
         setCatalog(data);
       })
-      .catch((e) => console.error("catalog load failed", e));
-  }, []);
+      .catch((e) => {
+        console.error("catalog load failed", e);
+        setLoadError(true);
+      });
+  }, [attempt]);
+
+  /* The staff dashboard is a full-screen app: no store chrome, no catalogue needed */
+  if (view.name === "admin") return <AdminApp />;
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-foreground">
@@ -48,7 +59,7 @@ export default function Page() {
           <Footer />
         </>
       ) : (
-        <Splash />
+        <Splash error={loadError} onRetry={() => { setLoadError(false); setAttempt((a) => a + 1); }} />
       )}
       <MobileBottomNav />
       <WhatsAppFloat />
@@ -57,11 +68,24 @@ export default function Page() {
   );
 }
 
-function Splash() {
+function Splash({ error, onRetry }: { error: boolean; onRetry: () => void }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center py-32 gap-4">
       <img src="/images/cl/logo.svg" alt="Cheap Laptops Ghana" className="h-12" />
-      <div className="w-7 h-7 border-3 border-[var(--em-red)] border-t-transparent rounded-full animate-spin" style={{ borderWidth: 3 }} />
+      {error ? (
+        <div className="flex flex-col items-center gap-3 text-sm text-gray-600">
+          <p>We couldn&apos;t load the store. Please check your connection.</p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="px-4 py-2 rounded-md bg-[var(--em-red)] text-white font-semibold"
+          >
+            Retry
+          </button>
+        </div>
+      ) : (
+        <div className="w-7 h-7 border-3 border-[var(--em-red)] border-t-transparent rounded-full animate-spin" style={{ borderWidth: 3 }} />
+      )}
     </div>
   );
 }

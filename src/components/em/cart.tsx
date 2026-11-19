@@ -1,11 +1,11 @@
 "use client";
 /* Cart, checkout, order success, wishlist, account views */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore, money } from "@/lib/store";
 import type { Catalog } from "@/lib/types";
 import { ProductCard } from "./cards";
 import { Breadcrumb } from "./chrome";
-import { Trash2, ShoppingCart, Heart, CreditCard, Banknote, Smartphone, Ticket, CheckCircle2, PackageSearch, Lock, User, Package } from "lucide-react";
+import { Trash2, ShoppingCart, Heart, CreditCard, Banknote, Smartphone, Ticket, CheckCircle2, PackageSearch, Lock, User, Package, MessageCircle } from "lucide-react";
 
 /* ---------------- Cart ---------------- */
 export function CartView() {
@@ -160,7 +160,26 @@ export function CheckoutView() {
       });
       const data = await res.json();
       if (!res.ok || !data?.ref) throw new Error(data?.error || "Order failed");
+      /* the order is saved; now hand it to the shop on WhatsApp */
+      const msg = [
+        `Hello Cheap Laptops Ghana, I just placed order *${data.ref}*:`,
+        "",
+        ...data.items.map((it: { name: string; qty: number; priceFmt: string }) => `• ${it.name} × ${it.qty} — ${it.priceFmt}`),
+        "",
+        `*Total: ${money(data.total)}*${data.shipping ? ` (incl. delivery ${money(data.shipping)})` : ""}`,
+        `Payment: ${payLabel}`,
+        "",
+        `Name: ${form.firstName.trim()} ${form.lastName.trim()}`,
+        `Phone: ${form.phone.trim()}`,
+        `Delivery: ${form.address.trim()}, ${form.city.trim() || "Accra"}, ${form.region}`,
+        ...(form.notes.trim() ? [`Notes: ${form.notes.trim()}`] : []),
+        "",
+        "Please confirm my order. Thank you!",
+      ].join("\n");
+      const whatsappUrl = `https://wa.me/${data.whatsapp || "233240999979"}?text=${encodeURIComponent(msg)}`;
       placeOrder({
+        whatsappUrl,
+        shop: data.shop ?? null,
         id: data.ref,
         date: new Date().toLocaleString("en-GB"),
         total: data.total,
@@ -171,20 +190,9 @@ export function CheckoutView() {
       });
       clearCart();
       navigate({ name: "order-success", orderId: data.ref });
-    } catch {
-      /* Offline fallback — keep the order locally so the customer still gets a receipt */
-      const id = "CL-" + Math.floor(100000 + Math.random() * 900000);
-      placeOrder({
-        id,
-        date: new Date().toLocaleString("en-GB"),
-        total,
-        totalFmt: money(total),
-        lines: cart.map((c) => ({ name: c.name, qty: c.qty, priceFmt: money(c.price * c.qty) })),
-        payment: payLabel,
-        name: `${form.firstName} ${form.lastName}`,
-      });
-      clearCart();
-      navigate({ name: "order-success", orderId: id });
+    } catch (e) {
+      /* Never fake a successful order: the shop would never receive it. */
+      toast(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "We couldn't place your order. Please check your connection and try again, or call 0240 999979.", "err");
     } finally {
       setPlacing(false);
     }
@@ -270,9 +278,10 @@ export function CheckoutView() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Shipping</span><span className="font-bold">{shipping === 0 ? "Free" : money(shipping)}</span></div>
               <div className="flex justify-between py-1.5"><span className="font-bold text-[#232630]">Total</span><span className="font-black text-[var(--em-red)] text-lg">{money(total)}</span></div>
             </div>
-            <button onClick={submit} disabled={placing} className="mt-3 w-full bg-[var(--em-red)] hover:bg-[var(--em-red-dark)] text-white font-bold py-3.5 rounded transition-colors disabled:opacity-60">
-              {placing ? "Placing order…" : "Place order"}
+            <button onClick={submit} disabled={placing} className="mt-3 w-full bg-[#25D366] hover:bg-[#1ebe5b] text-white font-bold py-3.5 rounded transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+              <MessageCircle size={18} /> {placing ? "Placing order…" : "Place order on WhatsApp"}
             </button>
+            <p className="text-[11.5px] text-gray-500 mt-2 text-center">Your order is saved, then WhatsApp opens with the details so our team can confirm it with you.</p>
             <p className="text-[11px] text-gray-400 mt-3 flex items-center gap-1.5"><Lock size={12} /> Your personal data will be used to process your order.</p>
           </div>
         </div>
@@ -285,12 +294,32 @@ export function CheckoutView() {
 export function OrderSuccessView({ orderId }: { orderId: string }) {
   const { lastOrder } = useStore();
   const o = lastOrder;
+  const wa = o && o.id === orderId ? o.whatsappUrl : undefined;
+
+  /* send the customer to WhatsApp once per order (same-tab navigation isn't popup-blocked) */
+  useEffect(() => {
+    if (!wa) return;
+    const key = `cl_wa_sent_${orderId}`;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch { /* storage unavailable */ }
+    const t = setTimeout(() => window.location.assign(wa), 1200);
+    return () => clearTimeout(t);
+  }, [wa, orderId]);
+
   return (
     <div className="max-w-[760px] mx-auto px-3 py-14">
       <div className="bg-white border rounded-lg p-8 text-center">
         <CheckCircle2 size={56} className="mx-auto text-[#1e9e4a]" />
         <h1 className="text-xl md:text-2xl font-extrabold text-[#232630] mt-4">Thank you. Your order has been received.</h1>
         <p className="text-gray-500 text-[13.5px] mt-2">Order number: <b className="text-[#232630]">{orderId}</b></p>
+        {wa && (
+          <div className="mt-5 bg-[#25D366]/10 border border-[#25D366]/30 rounded-lg p-4">
+            <p className="text-[13.5px] text-[#14532d] font-semibold">Opening WhatsApp so we can confirm your order{o?.shop ? ` with our ${o.shop} shop` : ""}…</p>
+            <a href={wa} className="mt-3 inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-bold text-[14px] px-6 py-3 rounded">
+              <MessageCircle size={18} /> Send my order on WhatsApp
+            </a>
+            <p className="text-[11.5px] text-gray-500 mt-2">If WhatsApp didn&apos;t open, tap the button. Just press <b>Send</b> in WhatsApp.</p>
+          </div>
+        )}
         {o && (
           <div className="mt-6 text-left border rounded-lg overflow-hidden">
             <div className="grid grid-cols-2 sm:grid-cols-4 bg-[#f7f7f8] text-[12.5px]">

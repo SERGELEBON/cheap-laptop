@@ -1,4 +1,4 @@
-// Cheap Laptops Ghana — Prisma schema
+// Cheap Laptops Ghana — Prisma schema (PostgreSQL — Neon via Vercel Storage)
 // Money is stored as integer pesewas (1 GH₵ = 100) to avoid float errors.
 
 generator client {
@@ -6,39 +6,199 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url       = env("DATABASE_URL") // pooled — used by the app at runtime
+  directUrl = env("DATABASE_URL_UNPOOLED") // direct — used by prisma db push
 }
 
-model AdminUser {
-  id           Int      @id @default(autoincrement())
-  username     String   @unique
-  passwordHash String // scrypt: salt:hash (hex)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+/* ------------------------------------------------------------------ */
+/* Staff & access control                                              */
+/* ------------------------------------------------------------------ */
+
+/// Roles, highest privilege first. Permissions live in src/lib/rbac.ts.
+enum Role {
+  OWNER // full control, incl. other owners
+  ADMIN // full control except owners
+  MANAGER // catalogue, stock, orders, finance reports
+  INVENTORY // stock keeper: products (read) + stock movements
+  SALES // order desk: orders + product/stock lookup
+  VIEWER // read-only (accountant, analyst)
+}
+
+model StaffUser {
+  id             Int       @id @default(autoincrement())
+  email          String    @unique // lowercase Google account email
+  name           String?
+  image          String?
+  googleSub      String?   @unique // bound on first Google sign-in
+  passwordHash   String? // scrypt "salt:hash" — for staff without a Google account
+  passwordSetAt  DateTime?
+  inviteTokenHash String? // sha256 of the one-time invite / reset link token (indexed below)
+  inviteExpiresAt DateTime?
+  failedLogins   Int       @default(0)
+  lockedUntil    DateTime?
+  role           Role      @default(VIEWER)
+  active         Boolean   @default(true)
+  sessionVersion Int       @default(1) // bump to revoke every session
+  lastLoginAt    DateTime?
+  invitedById    Int?
+  invitedBy      StaffUser?  @relation("Invites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invited        StaffUser[] @relation("Invites")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  /// false = restricted to the locations in `locations` (branch staff)
+  allLocations   Boolean   @default(true)
+  locations      StaffLocation[]
+
+  stockMovements StockMovement[]
+  auditLogs      AuditLog[]
+
+  @@index([inviteTokenHash])
+}
+
+/* ------------------------------------------------------------------ */
+/* Points of sale (shops / warehouses)                                 */
+/* ------------------------------------------------------------------ */
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  name      String // "Accra — Circle"
+  code      String   @unique // short code shown in tables, e.g. ACC
+  city      String
+  address   String   @default("")
+  phone     String   @default("")
+  /// Ghana regions this shop fulfils online orders for (comma-separated)
+  regions   String   @default("")
+  isMain    Boolean  @default(false) // receives orders from uncovered regions
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stocks    ProductStock[]
+  movements StockMovement[]
+  staff     StaffLocation[]
+  orders    Order[]
+}
+
+model StaffLocation {
+  staffId    Int
+  locationId Int
+  staff      StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  location   Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([staffId, locationId])
+}
+
+/// Stock of one product at one location. Product.stock = sum over locations.
+model ProductStock {
+  productId  Int
+  locationId Int
+  quantity   Int      @default(0)
+  updatedAt  DateTime @updatedAt
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([productId, locationId])
+  @@index([locationId])
+}
+
+model AuditLog {
+  id        Int        @id @default(autoincrement())
+  actorId   Int?
+  actor     StaffUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String? // kept even if the staff user is deleted
+  action    String // e.g. product.update, stock.adjust, staff.role
+  entity    String? // Product | Order | StaffUser
+  entityId  String?
+  summary   String  @default("")
+  details   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+}
+
+/* ------------------------------------------------------------------ */
+/* Catalogue & inventory                                               */
+/* ------------------------------------------------------------------ */
+
+enum ProductStatus {
+  ACTIVE // visible in the store
+  DRAFT // being prepared, hidden
+  ARCHIVED // retired, hidden, kept for order history
 }
 
 model Product {
-  id               Int      @id @default(autoincrement())
-  slug             String   @unique
-  name             String
-  sku              String   @unique
-  price            Int // pesewas
-  regularPrice     Int? // pesewas
-  onSale           Boolean  @default(false)
-  discount         Int      @default(0)
-  image            String?
-  categorySlugs    String   @default("") // comma-separated category slugs
-  brandSlug        String?
-  shortDescription String   @default("")
-  description      String   @default("")
-  averageRating    Float    @default(0)
-  reviewCount      Int      @default(0)
-  stock            Int      @default(10)
-  featured         Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                Int           @id @default(autoincrement())
+  slug              String        @unique
+  name              String
+  sku               String        @unique
+  status            ProductStatus @default(ACTIVE)
+  price             Int // pesewas
+  regularPrice      Int? // pesewas
+  costPrice         Int? // pesewas — purchase cost, finance roles only
+  onSale            Boolean       @default(false)
+  discount          Int           @default(0)
+  image             String?
+  categorySlugs     String        @default("") // comma-separated category slugs
+  brandSlug         String?
+  shortDescription  String        @default("")
+  description       String        @default("")
+  averageRating     Float         @default(0)
+  reviewCount       Int           @default(0)
+  stock             Int           @default(10) // total across locations (kept in sync)
+  lowStockThreshold Int           @default(3) // alert level per location
+  gallery           String        @default("") // extra image URLs, newline-separated
+  featured          Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  movements StockMovement[]
+  stocks    ProductStock[]
+
+  @@index([status])
 }
+
+enum StockMovementType {
+  INITIAL // opening stock when the product is created
+  RESTOCK // goods received from supplier (+)
+  RETURN // customer return back to shelf (+)
+  SALE // order placed (-)
+  CANCEL // order cancelled, stock restored (+)
+  DAMAGE // damaged / defective (-)
+  LOSS // lost / stolen (-)
+  COUNT // physical count correction (set absolute)
+  TRANSFER_OUT // sent to another location (-)
+  TRANSFER_IN // received from another location (+)
+}
+
+model StockMovement {
+  id          Int               @id @default(autoincrement())
+  productId   Int
+  product     Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type        StockMovementType
+  quantity    Int // signed change applied to stock
+  stockBefore Int
+  stockAfter  Int
+  note        String?
+  orderId     Int?
+  locationId  Int?
+  location    Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  actorId     Int?
+  actor       StaffUser?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime          @default(now())
+
+  @@index([productId, createdAt])
+  @@index([locationId, createdAt])
+  @@index([orderId])
+}
+
+/* ------------------------------------------------------------------ */
+/* Orders                                                              */
+/* ------------------------------------------------------------------ */
 
 model Order {
   id           Int         @id @default(autoincrement())
@@ -55,17 +215,24 @@ model Order {
   shipping     Int // pesewas
   total        Int // pesewas
   status       String      @default("pending") // pending | processing | shipped | delivered | cancelled
+  locationId   Int? // shop that fulfils the order
+  location     Location?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   items        OrderItem[]
+
+  @@index([status, createdAt])
+  @@index([locationId])
 }
 
 model OrderItem {
-  id        Int     @id @default(autoincrement())
+  id        Int    @id @default(autoincrement())
   orderId   Int
   productId Int?
   name      String
   price     Int // pesewas (unit price captured at purchase time)
   qty       Int
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
 }
